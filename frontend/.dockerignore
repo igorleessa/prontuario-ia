@@ -1,0 +1,4 @@
+# node_modules e dist da maquina local nao devem substituir o que a imagem instala.
+node_modules/
+dist/
+.angular/
