@@ -1,1 +1,36 @@
-<router-outlet />
+@if (autenticado()) {
+  <header class="cabecalho">
+    <div class="cabecalho__conteudo">
+      <a class="marca" routerLink="/atendimentos">
+        <span class="marca__simbolo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12h3l2.5 6 4-14L15 12h6" />
+          </svg>
+        </span>
+        <span class="marca__texto">
+          <strong>Prontuário IA</strong>
+          @if (usuario(); as u) {
+            <small>{{ u.clinicaNome }} · modo {{ u.modoOperacao }}</small>
+          }
+        </span>
+      </a>
+
+      <div class="cabecalho__usuario">
+        <a class="botao botao--discreto" routerLink="/configuracoes">Configurações</a>
+        @if (usuario(); as u) {
+          <span class="avatar" aria-hidden="true">{{ iniciais() }}</span>
+          <span class="cabecalho__nome">
+            <strong>{{ u.nome }}</strong>
+            <small>{{ u.email }}</small>
+          </span>
+        }
+        <button type="button" class="botao botao--discreto" (click)="sair()">Sair</button>
+      </div>
+    </div>
+  </header>
+}
+
+<main class="conteudo" [class.conteudo--limpo]="!autenticado()">
+  <router-outlet />
+</main>

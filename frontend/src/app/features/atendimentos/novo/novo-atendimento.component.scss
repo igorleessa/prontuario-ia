@@ -1,0 +1,151 @@
+.pagina {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-width: 44rem;
+}
+
+.voltar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  align-self: flex-start;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+.voltar:hover { color: var(--texto); }
+
+.pagina__subtitulo {
+  margin-top: 0.25rem;
+  color: var(--texto-suave);
+  font-size: 0.875rem;
+}
+
+.barra {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.busca { flex: 1 1 14rem; }
+
+.cadastro {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.25rem;
+  padding: 1.25rem;
+  background: var(--superficie-2);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+}
+
+.cadastro__enviar {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.opcional {
+  font-weight: 450;
+  color: var(--texto-tenue);
+}
+
+.pacientes {
+  list-style: none;
+  margin: 1.25rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 24rem;
+  overflow-y: auto;
+}
+
+.paciente {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.paciente:hover { border-color: var(--borda-forte); }
+
+.paciente--selecionado {
+  border-color: var(--primary);
+  background: var(--primary-suave);
+}
+
+.paciente__info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.35;
+
+  strong { font-weight: 580; }
+
+  small {
+    font-size: 0.8125rem;
+    color: var(--texto-tenue);
+  }
+}
+
+.paciente__marca {
+  display: grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  border-radius: 50%;
+  color: var(--primary-contraste);
+  background: transparent;
+
+  svg {
+    width: 0.75rem;
+    height: 0.75rem;
+    opacity: 0;
+  }
+}
+
+.paciente--selecionado .paciente__marca {
+  background: var(--primary);
+
+  svg { opacity: 1; }
+}
+
+.rodape {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.rodape__resumo {
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+.visualmente-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .cadastro { grid-template-columns: minmax(0, 1fr); }
+}
