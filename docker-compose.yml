@@ -53,11 +53,22 @@ services:
       Seed__NomeClinica: ${SEED_NOME_CLINICA:-Clinica de Teste}
       Seed__ModoOperacao: ${SEED_MODO_OPERACAO:-Integrado}
       Cors__OrigensPermitidas__0: "http://localhost:${FRONTEND_PORT:-4200}"
+      ArmazenamentoAudio__Endpoint: http://minio:9000
+      ArmazenamentoAudio__AccessKey: ${MINIO_USER}
+      ArmazenamentoAudio__SecretKey: ${MINIO_PASSWORD}
+      ArmazenamentoAudio__Bucket: consultas
+      # As chaves de API das clinicas sao cifradas com o Data Protection; o
+      # chaveiro fica em volume para sobreviver a recriacao do container.
+      DataProtection__Caminho: /chaves
+    volumes:
+      - dataprotection-keys:/chaves
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     depends_on:
       postgres:
         condition: service_healthy
+      minio:
+        condition: service_started
 
   frontend:
     build:
@@ -70,3 +81,4 @@ services:
 volumes:
   postgres-data:
   minio-data:
+  dataprotection-keys:

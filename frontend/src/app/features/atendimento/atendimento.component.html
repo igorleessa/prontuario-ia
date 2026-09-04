@@ -1,78 +1,336 @@
-<div class="atendimento">
-  <h1>Atendimento</h1>
+<div class="pagina">
+  <a class="voltar" routerLink="/atendimentos">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
+      <path d="m15 18-6-6 6-6" />
+    </svg>
+    Atendimentos
+  </a>
 
-  @if (mensagem()) {
-    <p class="mensagem">{{ mensagem() }}</p>
-  }
+  @if (atendimento(); as a) {
+    <header class="ficha cartao">
+      <div class="cartao__corpo ficha__corpo">
+        <div class="ficha__paciente">
+          <h1>{{ a.pacienteNome }}</h1>
+          <p class="ficha__meta">
+            {{ a.dataHora | date: "dd 'de' MMMM 'de' y, HH:mm" }}
+            · {{ a.medicoNome }}
+            @if (a.pacienteCpf) { · CPF {{ a.pacienteCpf }} }
+          </p>
+        </div>
 
-  @switch (etapa()) {
-    @case ('consentimento') {
-      <section>
-        <h2>Consentimento do paciente</h2>
-        <p>
-          Esta consulta será gravada para fins de documentação clínica. A gravação só é
-          iniciada após o aceite do paciente.
-        </p>
-        <button type="button" (click)="aceitarConsentimento()">Registrar consentimento</button>
-      </section>
+        <span class="selo selo--{{ classeStatus[a.status] }}">{{ rotuloStatus[a.status] }}</span>
+      </div>
+
+      <ol class="passos">
+        <li class="passos__item" [class.passos__item--ativo]="etapa() === 'consentimento'"
+            [class.passos__item--feito]="etapaConcluida().consentimento">
+          <span class="passos__numero">1</span> Consentimento
+        </li>
+        <li class="passos__item" [class.passos__item--ativo]="etapa() === 'gravacao'"
+            [class.passos__item--feito]="etapaConcluida().gravacao">
+          <span class="passos__numero">2</span> Gravação
+        </li>
+        <li class="passos__item" [class.passos__item--ativo]="etapa() === 'revisao'"
+            [class.passos__item--feito]="etapaConcluida().revisao">
+          <span class="passos__numero">3</span> Revisão
+        </li>
+      </ol>
+    </header>
+
+    @if (erro()) {
+      <p class="aviso aviso--erro" role="alert">{{ erro() }}</p>
     }
 
-    @case ('gravacao') {
-      <section>
-        <h2>Gravação da consulta</h2>
-        @if (gravando()) {
-          <p>Gravando…</p>
-          <button type="button" (click)="pararGravacao()">Encerrar consulta</button>
-        } @else {
-          <button type="button" (click)="iniciarGravacao()">Iniciar gravação</button>
-        }
-      </section>
+    @switch (etapa()) {
+      @case ('consentimento') {
+        <section class="cartao">
+          <div class="cartao__corpo">
+            <h2>Consentimento do paciente</h2>
+            <p class="secao__texto">
+              Esta consulta será gravada para fins de documentação clínica. A gravação só é
+              iniciada após o aceite do paciente, e o áudio permanece sob responsabilidade da clínica.
+            </p>
+
+            <ul class="topicos">
+              <li>Leia o texto acima em voz alta para o paciente.</li>
+              <li>Registre o aceite apenas após a confirmação verbal.</li>
+              <li>O paciente pode recusar — nesse caso, siga direto para a revisão manual.</li>
+            </ul>
+
+            <div class="acoes">
+              <button type="button" class="botao" (click)="aceitarConsentimento()">
+                Paciente consentiu — registrar
+              </button>
+              <button type="button" class="botao botao--secundario" (click)="pularGravacao()">
+                Seguir sem gravar
+              </button>
+            </div>
+          </div>
+        </section>
+      }
+
+      @case ('gravacao') {
+        <section class="cartao">
+          <div class="cartao__corpo">
+            <h2>Gravação da consulta</h2>
+
+            @if (consentimentoEm(); as registradoEm) {
+              <p class="secao__texto">
+                Consentimento registrado em {{ registradoEm | date: "dd/MM/y 'às' HH:mm" }}.
+              </p>
+            }
+
+            @if (gravando()) {
+              <div class="gravador gravador--ativo">
+                <span class="gravador__pulso" aria-hidden="true"></span>
+                <div>
+                  <strong>Gravando</strong>
+                  <span class="gravador__tempo">{{ tempoGravado() }}</span>
+                </div>
+              </div>
+
+              <div class="acoes">
+                <button type="button" class="botao botao--perigo" [disabled]="enviandoAudio()"
+                        (click)="pararGravacao()">
+                  {{ enviandoAudio() ? 'Enviando áudio…' : 'Encerrar consulta' }}
+                </button>
+              </div>
+            } @else {
+              <p class="secao__texto">
+                O áudio é capturado pelo navegador e usado apenas para gerar o rascunho do prontuário.
+              </p>
+
+              <div class="acoes">
+                <button type="button" class="botao" (click)="iniciarGravacao()">Iniciar gravação</button>
+                <button type="button" class="botao botao--secundario" (click)="pularGravacao()">
+                  Preencher manualmente
+                </button>
+              </div>
+            }
+          </div>
+        </section>
+      }
+
+      @case ('processando') {
+        <section class="cartao">
+          <div class="cartao__corpo">
+            <h2>Gerando o rascunho</h2>
+            <div class="processando">
+              <span class="processando__giro" aria-hidden="true"></span>
+              <div>
+                <strong>Transcrevendo a consulta e extraindo os campos</strong>
+                <p class="secao__texto">
+                  Isso leva alguns instantes. A tela avança sozinha quando o rascunho ficar pronto.
+                </p>
+              </div>
+            </div>
+
+            <div class="acoes">
+              <button type="button" class="botao botao--secundario" (click)="pularGravacao()">
+                Preencher manualmente
+              </button>
+              <span class="acoes__nota">Não é preciso esperar: você pode documentar agora.</span>
+            </div>
+          </div>
+        </section>
+      }
+
+      @case ('revisao') {
+        <section class="cartao">
+          <div class="cartao__corpo">
+            <h2>Revisão do prontuário</h2>
+            <p class="secao__texto">
+              Revise e edite cada campo antes de confirmar. Nada é salvo sem sua revisão.
+            </p>
+
+            @if (erroIA()) {
+              <p class="aviso aviso--erro" role="alert">
+                A transcrição automática falhou: {{ erroIA() }} Preencha o prontuário manualmente.
+              </p>
+            } @else if (transcricao()) {
+              <p class="aviso aviso--info">
+                Rascunho gerado por IA a partir do áudio. Revise cada campo — nada é salvo sem sua confirmação.
+              </p>
+            }
+
+            @if (transcricao()) {
+              <div class="transcricao">
+                <button type="button" class="botao botao--discreto" (click)="alternarTranscricao()">
+                  {{ mostrarTranscricao() ? 'Ocultar transcrição' : 'Ver transcrição do áudio' }}
+                </button>
+                @if (mostrarTranscricao()) {
+                  <pre class="transcricao__texto">{{ transcricao() }}</pre>
+                }
+              </div>
+            }
+
+            @if (aviso()) {
+              <p class="aviso aviso--info">{{ aviso() }}</p>
+            }
+
+            <div class="visoes" role="tablist" aria-label="Formato do registro">
+              <button type="button" role="tab" class="visoes__item"
+                      [class.visoes__item--ativa]="visao() === 'estruturado'"
+                      [attr.aria-selected]="visao() === 'estruturado'"
+                      (click)="mostrarVisao('estruturado')">
+                Prontuário estruturado
+                @if (visaoOficial() === 'estruturado') { <span class="visoes__marca">oficial</span> }
+              </button>
+              <button type="button" role="tab" class="visoes__item"
+                      [class.visoes__item--ativa]="visao() === 'nota'"
+                      [attr.aria-selected]="visao() === 'nota'"
+                      (click)="mostrarVisao('nota')">
+                Nota para o EMR
+                @if (visaoOficial() === 'nota') { <span class="visoes__marca">oficial</span> }
+              </button>
+            </div>
+
+            @if (visao() === 'estruturado') {
+            <form [formGroup]="form" (ngSubmit)="confirmar()" novalidate>
+              <div class="campo">
+                <label class="campo__rotulo" for="queixa">Queixa principal</label>
+                <textarea id="queixa" formControlName="queixaPrincipal" rows="2"></textarea>
+              </div>
+
+              <div class="campo">
+                <label class="campo__rotulo" for="hda">História da doença atual</label>
+                <textarea id="hda" formControlName="hda" rows="5"></textarea>
+              </div>
+
+              <div class="campo">
+                <label class="campo__rotulo" for="antecedentes">Antecedentes</label>
+                <textarea id="antecedentes" formControlName="antecedentes" rows="3"></textarea>
+              </div>
+
+              <div class="campo">
+                <label class="campo__rotulo" for="exame">Exame físico</label>
+                <textarea id="exame" formControlName="exameFisico" rows="3"></textarea>
+              </div>
+
+              <div class="dupla">
+                <div class="campo">
+                  <label class="campo__rotulo" for="hipotese">Hipótese diagnóstica</label>
+                  <textarea id="hipotese" formControlName="hipoteseDiagnostica" rows="2"></textarea>
+                </div>
+
+                <div class="campo">
+                  <label class="campo__rotulo" for="cid">CID-10</label>
+                  <input id="cid" type="text" formControlName="cid10Sugerido" placeholder="Ex.: J06.9" />
+                  <span class="campo__dica">Sugestão da IA — sempre revisada pelo médico.</span>
+                </div>
+              </div>
+
+              <div class="campo">
+                <label class="campo__rotulo" for="conduta">Conduta</label>
+                <textarea id="conduta" formControlName="conduta" rows="4"></textarea>
+              </div>
+
+              <div class="acoes acoes--rodape">
+                <button type="submit" class="botao" [disabled]="salvando()">
+                  {{ salvando() ? 'Salvando…' : 'Confirmar e finalizar' }}
+                </button>
+                <span class="acoes__nota">Após confirmar, o registro passa a ser somente leitura.</span>
+              </div>
+            </form>
+            } @else {
+            <div class="nota">
+              @if (carregandoNota()) {
+                <p class="nota__estado">Gerando a nota clínica…</p>
+              } @else if (nota()) {
+                <pre class="nota__texto">{{ nota() }}</pre>
+                <div class="acoes">
+                  <button type="button" class="botao botao--secundario" (click)="copiarNota()">
+                    {{ notaCopiada() ? 'Copiado' : 'Copiar nota' }}
+                  </button>
+                  <span class="acoes__nota">
+                    Mesmo formato enviado ao EMR na modalidade Conector.
+                  </span>
+                </div>
+              }
+            </div>
+              <p class="acoes__nota">
+                Para editar, volte ao prontuário estruturado.
+              </p>
+            }
+          </div>
+        </section>
+      }
+
+      @case ('encerrado') {
+        <section class="cartao">
+          <div class="cartao__corpo">
+            @if (finalizado()) {
+              <p class="aviso aviso--sucesso">
+                Atendimento finalizado. O registro clínico abaixo é somente leitura.
+              </p>
+            } @else {
+              <p class="aviso aviso--info">Este atendimento foi cancelado.</p>
+            }
+
+            <div class="visoes" role="tablist" aria-label="Formato do registro">
+              <button type="button" role="tab" class="visoes__item"
+                      [class.visoes__item--ativa]="visao() === 'estruturado'"
+                      [attr.aria-selected]="visao() === 'estruturado'"
+                      (click)="mostrarVisao('estruturado')">
+                Prontuário estruturado
+                @if (visaoOficial() === 'estruturado') { <span class="visoes__marca">oficial</span> }
+              </button>
+              <button type="button" role="tab" class="visoes__item"
+                      [class.visoes__item--ativa]="visao() === 'nota'"
+                      [attr.aria-selected]="visao() === 'nota'"
+                      (click)="mostrarVisao('nota')">
+                Nota para o EMR
+                @if (visaoOficial() === 'nota') { <span class="visoes__marca">oficial</span> }
+              </button>
+            </div>
+
+            @if (visao() === 'estruturado') {
+            <dl class="registro">
+              <div><dt>Queixa principal</dt><dd>{{ form.value.queixaPrincipal || '—' }}</dd></div>
+              <div><dt>História da doença atual</dt><dd>{{ form.value.hda || '—' }}</dd></div>
+              <div><dt>Antecedentes</dt><dd>{{ form.value.antecedentes || '—' }}</dd></div>
+              <div><dt>Exame físico</dt><dd>{{ form.value.exameFisico || '—' }}</dd></div>
+              <div><dt>Hipótese diagnóstica</dt><dd>{{ form.value.hipoteseDiagnostica || '—' }}</dd></div>
+              <div><dt>CID-10</dt><dd>{{ form.value.cid10Sugerido || '—' }}</dd></div>
+              <div><dt>Conduta</dt><dd>{{ form.value.conduta || '—' }}</dd></div>
+            </dl>
+            } @else {
+            <div class="nota">
+              @if (carregandoNota()) {
+                <p class="nota__estado">Gerando a nota clínica…</p>
+              } @else if (nota()) {
+                <pre class="nota__texto">{{ nota() }}</pre>
+                <div class="acoes">
+                  <button type="button" class="botao botao--secundario" (click)="copiarNota()">
+                    {{ notaCopiada() ? 'Copiado' : 'Copiar nota' }}
+                  </button>
+                  <span class="acoes__nota">
+                    Mesmo formato enviado ao EMR na modalidade Conector.
+                  </span>
+                </div>
+              }
+            </div>
+            }
+
+            <div class="acoes">
+              <button type="button" class="botao botao--secundario" (click)="voltarParaLista()">
+                Voltar para a lista
+              </button>
+            </div>
+          </div>
+        </section>
+      }
     }
-
-    @case ('revisao') {
-      <section>
-        <h2>Revisão do prontuário</h2>
-        <p>Revise e edite cada campo antes de confirmar. Nada é salvo sem sua revisão.</p>
-
-        <form [formGroup]="form" (ngSubmit)="confirmar()">
-          <label>
-            Queixa principal
-            <textarea formControlName="queixaPrincipal" rows="2"></textarea>
-          </label>
-
-          <label>
-            História da doença atual
-            <textarea formControlName="hda" rows="4"></textarea>
-          </label>
-
-          <label>
-            Antecedentes
-            <textarea formControlName="antecedentes" rows="3"></textarea>
-          </label>
-
-          <label>
-            Exame físico
-            <textarea formControlName="exameFisico" rows="3"></textarea>
-          </label>
-
-          <label>
-            Hipótese diagnóstica
-            <textarea formControlName="hipoteseDiagnostica" rows="2"></textarea>
-          </label>
-
-          <label>
-            CID-10
-            <input type="text" formControlName="cid10Sugerido" />
-          </label>
-
-          <label>
-            Conduta
-            <textarea formControlName="conduta" rows="3"></textarea>
-          </label>
-
-          <button type="submit">Confirmar e finalizar</button>
-        </form>
-      </section>
-    }
+  } @else if (carregando()) {
+    <div class="cartao"><div class="vazio">Carregando atendimento…</div></div>
+  } @else {
+    <div class="cartao">
+      <div class="vazio">
+        <span class="vazio__titulo">Atendimento não encontrado</span>
+        <p>Ele pode ter sido removido ou pertencer a outra clínica.</p>
+        <a class="botao" routerLink="/atendimentos">Voltar para a lista</a>
+      </div>
+    </div>
   }
 </div>

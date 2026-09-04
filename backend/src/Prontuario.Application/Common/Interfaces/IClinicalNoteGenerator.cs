@@ -9,5 +9,6 @@ namespace Prontuario.Application.Common.Interfaces;
 /// </summary>
 public interface IClinicalNoteGenerator
 {
-    Task<RascunhoClinicoDto> GerarRascunhoAsync(string transcricao, CancellationToken cancellationToken = default);
+    Task<RascunhoClinicoDto> GerarRascunhoAsync(
+        string transcricao, CredenciaisIA credenciais, CancellationToken cancellationToken = default);
 }
