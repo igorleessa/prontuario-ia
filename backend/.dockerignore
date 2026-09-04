@@ -1,0 +1,6 @@
+# Artefatos de build local: se entrarem no contexto, o project.assets.json da
+# maquina do dev sobrescreve o restore feito dentro da imagem e a publicacao falha.
+**/bin/
+**/obj/
+**/.vs/
+**/*.user

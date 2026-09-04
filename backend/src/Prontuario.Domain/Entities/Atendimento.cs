@@ -17,6 +17,9 @@ public class Atendimento : BaseEntity
     public bool ConsentimentoGravacao { get; set; }
     public DateTime? ConsentimentoEm { get; set; }
 
+    /// <summary>Motivo da falha do pipeline de IA, mostrado ao medico para que ele saiba por que precisa preencher manualmente.</summary>
+    public string? ErroProcessamentoIA { get; set; }
+
     public GravacaoAudio? GravacaoAudio { get; set; }
     public ProntuarioRegistro? Prontuario { get; set; }
     public NotaExportavel? NotaExportavel { get; set; }

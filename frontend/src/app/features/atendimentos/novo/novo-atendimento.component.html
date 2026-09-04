@@ -1,0 +1,116 @@
+<div class="pagina">
+  <a class="voltar" routerLink="/atendimentos">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
+      <path d="m15 18-6-6 6-6" />
+    </svg>
+    Atendimentos
+  </a>
+
+  <div>
+    <h1>Novo atendimento</h1>
+    <p class="pagina__subtitulo">Escolha o paciente da consulta para abrir o atendimento.</p>
+  </div>
+
+  @if (erro()) {
+    <p class="aviso aviso--erro" role="alert">{{ erro() }}</p>
+  }
+
+  <div class="cartao">
+    <div class="cartao__corpo">
+      <div class="barra">
+        <div class="campo busca">
+          <label class="visualmente-oculto" for="busca">Buscar paciente</label>
+          <input id="busca" type="search" placeholder="Buscar por nome ou CPF…"
+                 [ngModel]="busca()" (ngModelChange)="busca.set($event)" />
+        </div>
+
+        <button type="button" class="botao botao--secundario" (click)="alternarCadastro()">
+          {{ cadastrando() ? 'Cancelar cadastro' : 'Cadastrar paciente' }}
+        </button>
+      </div>
+
+      @if (cadastrando()) {
+        <form class="cadastro" [formGroup]="formPaciente" (ngSubmit)="cadastrarPaciente()" novalidate>
+          <div class="campo">
+            <label class="campo__rotulo" for="nome">Nome completo</label>
+            <input id="nome" type="text" formControlName="nome" autocomplete="off" />
+          </div>
+
+          <div class="campo">
+            <label class="campo__rotulo" for="cpf">CPF <span class="opcional">opcional</span></label>
+            <input id="cpf" type="text" formControlName="cpf" inputmode="numeric" autocomplete="off" />
+          </div>
+
+          <div class="campo">
+            <label class="campo__rotulo" for="nascimento">
+              Data de nascimento <span class="opcional">opcional</span>
+            </label>
+            <input id="nascimento" type="date" formControlName="dataNascimento" />
+          </div>
+
+          <div class="campo">
+            <label class="campo__rotulo" for="contato">Contato <span class="opcional">opcional</span></label>
+            <input id="contato" type="text" formControlName="contato" autocomplete="off" />
+          </div>
+
+          <button type="submit" class="botao cadastro__enviar" [disabled]="formPaciente.invalid">
+            Salvar paciente
+          </button>
+        </form>
+      }
+
+      @if (carregando()) {
+        <div class="vazio">Carregando pacientes…</div>
+      } @else if (filtrados().length === 0) {
+        <div class="vazio">
+          <span class="vazio__titulo">Nenhum paciente encontrado</span>
+          <p>Cadastre o paciente para abrir o atendimento.</p>
+        </div>
+      } @else {
+        <ul class="pacientes">
+          @for (paciente of filtrados(); track paciente.id) {
+            <li>
+              <button type="button" class="paciente"
+                      [class.paciente--selecionado]="selecionado()?.id === paciente.id"
+                      [attr.aria-pressed]="selecionado()?.id === paciente.id"
+                      (click)="selecionar(paciente)">
+                <span class="paciente__info">
+                  <strong>{{ paciente.nome }}</strong>
+                  <small>
+                    @if (paciente.cpf) { CPF {{ paciente.cpf }} }
+                    @if (paciente.cpf && idade(paciente.dataNascimento)) { · }
+                    @if (idade(paciente.dataNascimento)) { {{ idade(paciente.dataNascimento) }} }
+                    @if (!paciente.cpf && !idade(paciente.dataNascimento)) { Sem dados adicionais }
+                  </small>
+                </span>
+
+                <span class="paciente__marca" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                       stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                </span>
+              </button>
+            </li>
+          }
+        </ul>
+      }
+    </div>
+  </div>
+
+  <div class="rodape">
+    <span class="rodape__resumo">
+      @if (selecionado(); as p) {
+        Paciente selecionado: <strong>{{ p.nome }}</strong>
+      } @else {
+        Selecione um paciente para continuar.
+      }
+    </span>
+
+    <button type="button" class="botao" [disabled]="!selecionado() || abrindo()"
+            (click)="abrirAtendimento()">
+      {{ abrindo() ? 'Abrindo…' : 'Abrir atendimento' }}
+    </button>
+  </div>
+</div>

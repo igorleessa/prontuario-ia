@@ -1,0 +1,97 @@
+<div class="pagina">
+  <a class="voltar" routerLink="/atendimentos">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
+      <path d="m15 18-6-6 6-6" />
+    </svg>
+    Atendimentos
+  </a>
+
+  <div>
+    <h1>Transcrição automática</h1>
+    <p class="pagina__subtitulo">
+      Credenciais da OpenAI usadas para transcrever a consulta e gerar o rascunho do prontuário.
+    </p>
+  </div>
+
+  @if (erro()) {
+    <p class="aviso aviso--erro" role="alert">{{ erro() }}</p>
+  }
+  @if (sucesso()) {
+    <p class="aviso aviso--sucesso" role="status">{{ sucesso() }}</p>
+  }
+
+  <div class="cartao">
+    <div class="cartao__corpo">
+      @if (carregando()) {
+        <div class="vazio">Carregando configuração…</div>
+      } @else {
+        <div class="estado" [class.estado--ativo]="configuracao()?.chaveConfigurada">
+          <span class="estado__ponto" aria-hidden="true"></span>
+          <div>
+            @if (configuracao()?.chaveConfigurada) {
+              <strong>Transcrição automática ativa</strong>
+              <small>
+                Chave terminada em …{{ configuracao()?.chaveApiSufixo }}
+                @if (configuracao()?.atualizadoEm; as em) {
+                  · atualizada em {{ em | date: "dd/MM/y 'às' HH:mm" }}
+                }
+              </small>
+            } @else {
+              <strong>Transcrição automática inativa</strong>
+              <small>Cadastre uma chave para que o rascunho seja gerado a partir do áudio.</small>
+            }
+          </div>
+        </div>
+
+        <form [formGroup]="form" (ngSubmit)="salvar()" novalidate>
+          <div class="campo">
+            <label class="campo__rotulo" for="chave">Chave da API da OpenAI</label>
+            <input id="chave" type="password" formControlName="chaveApi" autocomplete="off"
+                   spellcheck="false"
+                   [placeholder]="configuracao()?.chaveConfigurada ? 'Deixe em branco para manter a atual' : 'sk-…'" />
+            <span class="campo__dica">
+              Guardada cifrada no servidor e nunca devolvida por nenhuma tela. Gere em
+              platform.openai.com/api-keys.
+            </span>
+          </div>
+
+          <div class="dupla">
+            <div class="campo">
+              <label class="campo__rotulo" for="modelo-transcricao">Modelo de transcrição</label>
+              <input id="modelo-transcricao" type="text" formControlName="modeloTranscricao"
+                     autocomplete="off" spellcheck="false" />
+              <span class="campo__dica">Whisper API. Padrão: whisper-1.</span>
+            </div>
+
+            <div class="campo">
+              <label class="campo__rotulo" for="modelo-texto">Modelo de extração</label>
+              <input id="modelo-texto" type="text" formControlName="modeloTexto"
+                     autocomplete="off" spellcheck="false" />
+              <span class="campo__dica">
+                Precisa suportar Structured Outputs — gpt-4o, gpt-4o-mini, gpt-4.1.
+              </span>
+            </div>
+          </div>
+
+          <div class="acoes">
+            <button type="submit" class="botao" [disabled]="salvando()">
+              {{ salvando() ? 'Salvando…' : 'Salvar' }}
+            </button>
+
+            @if (configuracao()?.chaveConfigurada) {
+              <button type="button" class="botao botao--secundario" (click)="remover()">
+                Remover chave
+              </button>
+            }
+          </div>
+        </form>
+
+        <p class="rodape-nota">
+          O áudio da consulta é enviado à OpenAI para transcrição. Confirme que isso é compatível
+          com a política de privacidade da clínica e com o consentimento obtido do paciente.
+        </p>
+      }
+    </div>
+  </div>
+</div>

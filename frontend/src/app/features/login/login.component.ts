@@ -15,6 +15,7 @@ export class LoginComponent {
   private readonly router = inject(Router);
 
   readonly erro = signal<string | null>(null);
+  readonly enviando = signal(false);
 
   readonly form = inject(FormBuilder).nonNullable.group({
     email: ['', [Validators.required, Validators.email]],
@@ -22,14 +23,24 @@ export class LoginComponent {
   });
 
   entrar(): void {
-    if (this.form.invalid) {
+    if (this.form.invalid || this.enviando()) {
       return;
     }
 
+    this.erro.set(null);
+    this.enviando.set(true);
+
     const { email, senha } = this.form.getRawValue();
     this.auth.login(email, senha).subscribe({
-      next: () => this.router.navigate(['/atendimento']),
-      error: () => this.erro.set('Credenciais invalidas.'),
+      next: () => this.router.navigate(['/atendimentos']),
+      error: (erro: { status?: number }) => {
+        this.enviando.set(false);
+        this.erro.set(
+          erro.status === 401
+            ? 'E-mail ou senha incorretos.'
+            : 'Não foi possível entrar. Verifique sua conexão e tente novamente.',
+        );
+      },
     });
   }
 }

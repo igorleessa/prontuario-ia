@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Prontuario.Application.Common.Interfaces;
 using Prontuario.Application.Common.Models;
 using Prontuario.Domain.Entities;
 using Prontuario.Domain.Enums;
@@ -16,15 +17,20 @@ namespace Prontuario.Infrastructure.Services;
 public class ExportacaoEmrOutput
 {
     private readonly ApplicationDbContext _db;
+    private readonly INotaClinicaFormatter _formatador;
 
-    public ExportacaoEmrOutput(ApplicationDbContext db) => _db = db;
+    public ExportacaoEmrOutput(ApplicationDbContext db, INotaClinicaFormatter formatador)
+    {
+        _db = db;
+        _formatador = formatador;
+    }
 
     public async Task ConfirmarAsync(Guid atendimentoId, RascunhoClinicoDto revisado, CancellationToken cancellationToken = default)
     {
         var nota = await _db.NotasExportaveis.SingleOrDefaultAsync(n => n.AtendimentoId == atendimentoId, cancellationToken)
             ?? new NotaExportavel { AtendimentoId = atendimentoId };
 
-        nota.ConteudoFormatado = FormatarTexto(revisado);
+        nota.ConteudoFormatado = _formatador.Formatar(revisado);
         nota.Status = StatusNota.Revisada;
 
         if (_db.Entry(nota).State == EntityState.Detached)
@@ -37,14 +43,4 @@ public class ExportacaoEmrOutput
         // TODO: quando a clinica tiver Clinica.WebhookUrl configurado, enviar o
         // payload assinado com Clinica.WebhookSecret e marcar Status = Exportada.
     }
-
-    private static string FormatarTexto(RascunhoClinicoDto d) => string.Join(Environment.NewLine, new[]
-    {
-        $"Queixa principal: {d.QueixaPrincipal}",
-        $"HDA: {d.Hda}",
-        $"Antecedentes: {d.Antecedentes}",
-        $"Exame fisico: {d.ExameFisico}",
-        $"Hipotese diagnostica (CID-10): {d.HipoteseDiagnostica} ({d.Cid10Sugerido})",
-        $"Conduta: {d.Conduta}",
-    });
 }

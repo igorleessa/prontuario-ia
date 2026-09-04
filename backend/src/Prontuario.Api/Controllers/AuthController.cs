@@ -22,6 +22,6 @@ public class AuthController : ControllerBase
             return Unauthorized(new { erro = resultado.Erro });
         }
 
-        return Ok(new { token = resultado.Token });
+        return Ok(new { token = resultado.Token, usuario = resultado.Usuario });
     }
 }

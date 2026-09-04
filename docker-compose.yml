@@ -34,7 +34,13 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      # Partes separadas: o backend monta a connection string com o builder do
+      # Npgsql, que escapa senhas contendo ";" ou "=".
+      Postgres__Host: postgres
+      Postgres__Port: "5432"
+      Postgres__Database: ${POSTGRES_DB}
+      Postgres__Username: ${POSTGRES_USER}
+      Postgres__Password: ${POSTGRES_PASSWORD}
       Database__AplicarMigrationsNaInicializacao: "true"
       Jwt__Key: ${JWT_KEY}
       Jwt__Issuer: ${JWT_ISSUER:-ProntuarioIA}
@@ -47,11 +53,22 @@ services:
       Seed__NomeClinica: ${SEED_NOME_CLINICA:-Clinica de Teste}
       Seed__ModoOperacao: ${SEED_MODO_OPERACAO:-Integrado}
       Cors__OrigensPermitidas__0: "http://localhost:${FRONTEND_PORT:-4200}"
+      ArmazenamentoAudio__Endpoint: http://minio:9000
+      ArmazenamentoAudio__AccessKey: ${MINIO_USER}
+      ArmazenamentoAudio__SecretKey: ${MINIO_PASSWORD}
+      ArmazenamentoAudio__Bucket: consultas
+      # As chaves de API das clinicas sao cifradas com o Data Protection; o
+      # chaveiro fica em volume para sobreviver a recriacao do container.
+      DataProtection__Caminho: /chaves
+    volumes:
+      - dataprotection-keys:/chaves
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     depends_on:
       postgres:
         condition: service_healthy
+      minio:
+        condition: service_started
 
   frontend:
     build:
@@ -64,3 +81,4 @@ services:
 volumes:
   postgres-data:
   minio-data:
+  dataprotection-keys:

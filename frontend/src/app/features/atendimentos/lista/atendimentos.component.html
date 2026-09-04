@@ -1,0 +1,102 @@
+<div class="pagina">
+  <div class="pagina__topo">
+    <div>
+      <h1>Atendimentos</h1>
+      <p class="pagina__subtitulo">
+        @if (emAndamento() === 1) {
+          1 atendimento em andamento
+        } @else {
+          {{ emAndamento() }} atendimentos em andamento
+        }
+      </p>
+    </div>
+
+    <a class="botao" routerLink="/atendimentos/novo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" width="16" height="16" aria-hidden="true">
+        <path d="M12 5v14M5 12h14" />
+      </svg>
+      Novo atendimento
+    </a>
+  </div>
+
+  @if (erro()) {
+    <p class="aviso aviso--erro" role="alert">{{ erro() }}</p>
+  }
+
+  <div class="filtros">
+    <div class="abas" role="tablist">
+      <button type="button" role="tab" [attr.aria-selected]="aba() === 'emAndamento'"
+              [class.abas__item--ativa]="aba() === 'emAndamento'" class="abas__item"
+              (click)="aba.set('emAndamento')">Em andamento</button>
+      <button type="button" role="tab" [attr.aria-selected]="aba() === 'finalizados'"
+              [class.abas__item--ativa]="aba() === 'finalizados'" class="abas__item"
+              (click)="aba.set('finalizados')">Encerrados</button>
+      <button type="button" role="tab" [attr.aria-selected]="aba() === 'todos'"
+              [class.abas__item--ativa]="aba() === 'todos'" class="abas__item"
+              (click)="aba.set('todos')">Todos</button>
+    </div>
+
+    <div class="campo busca">
+      <label class="visualmente-oculto" for="busca">Buscar por paciente ou médico</label>
+      <input id="busca" type="search" placeholder="Buscar paciente ou médico…"
+             [ngModel]="busca()" (ngModelChange)="busca.set($event)" />
+    </div>
+  </div>
+
+  @if (carregando()) {
+    <div class="cartao">
+      <div class="vazio">Carregando atendimentos…</div>
+    </div>
+  } @else if (filtrados().length === 0) {
+    <div class="cartao">
+      <div class="vazio">
+        <span class="vazio__titulo">
+          @if (lista().length === 0) {
+            Nenhum atendimento registrado
+          } @else {
+            Nenhum atendimento neste filtro
+          }
+        </span>
+        @if (lista().length === 0) {
+          <p>Abra o primeiro atendimento para começar a documentar a consulta.</p>
+          <a class="botao" routerLink="/atendimentos/novo">Novo atendimento</a>
+        } @else {
+          <p>Ajuste a busca ou escolha outra aba.</p>
+        }
+      </div>
+    </div>
+  } @else {
+    <ul class="lista">
+      @for (atendimento of filtrados(); track atendimento.id) {
+        <li>
+          <a class="item" [routerLink]="['/atendimentos', atendimento.id]">
+            <span class="item__paciente">
+              <strong>{{ atendimento.pacienteNome }}</strong>
+              <small>{{ atendimento.medicoNome }}</small>
+            </span>
+
+            <span class="item__data">
+              {{ atendimento.dataHora | date: "dd 'de' MMM, HH:mm" }}
+            </span>
+
+            <span class="selo selo--{{ classeStatus[atendimento.status] }}">
+              {{ rotuloStatus[atendimento.status] }}
+            </span>
+
+            <span class="item__acoes">
+              @if (cancelavel(atendimento)) {
+                <button type="button" class="botao botao--discreto item__cancelar"
+                        (click)="cancelar(atendimento, $event)">Cancelar</button>
+              }
+              <svg class="item__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </span>
+          </a>
+        </li>
+      }
+    </ul>
+  }
+</div>

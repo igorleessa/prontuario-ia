@@ -27,7 +27,9 @@ public class AuthService : IAuthService
 
     public async Task<AuthResultDto> LoginAsync(string email, string senha, CancellationToken cancellationToken = default)
     {
-        var usuario = await _db.Usuarios.SingleOrDefaultAsync(u => u.Email == email, cancellationToken);
+        var usuario = await _db.Usuarios
+            .Include(u => u.Clinica)
+            .SingleOrDefaultAsync(u => u.Email == email, cancellationToken);
         if (usuario is null)
         {
             return new AuthResultDto(false, null, "Credenciais invalidas.");
@@ -40,7 +42,14 @@ public class AuthService : IAuthService
         }
 
         var token = GerarToken(usuario);
-        return new AuthResultDto(true, token, null);
+        var perfil = new UsuarioLogadoDto(
+            usuario.Nome,
+            usuario.Email,
+            usuario.Papel.ToString(),
+            usuario.Clinica!.Nome,
+            usuario.Clinica.ModoOperacao.ToString());
+
+        return new AuthResultDto(true, token, null, perfil);
     }
 
     private string GerarToken(Usuario usuario)
@@ -49,6 +58,7 @@ public class AuthService : IAuthService
         {
             new Claim(JwtRegisteredClaimNames.Sub, usuario.Id.ToString()),
             new Claim(JwtRegisteredClaimNames.Email, usuario.Email),
+            new Claim(JwtRegisteredClaimNames.Name, usuario.Nome),
             new Claim("clinicaId", usuario.ClinicaId.ToString()),
             new Claim(ClaimTypes.Role, usuario.Papel.ToString()),
         };

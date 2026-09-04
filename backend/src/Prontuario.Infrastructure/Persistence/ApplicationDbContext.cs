@@ -19,6 +19,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<ProntuarioRegistro> Prontuarios => Set<ProntuarioRegistro>();
     public DbSet<NotaExportavel> NotasExportaveis => Set<NotaExportavel>();
     public DbSet<LogAuditoria> LogsAuditoria => Set<LogAuditoria>();
+    public DbSet<ConfiguracaoIA> ConfiguracoesIA => Set<ConfiguracaoIA>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
