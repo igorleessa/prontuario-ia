@@ -1,0 +1,21 @@
+<div class="login">
+  <h1>Prontuário IA</h1>
+
+  <form [formGroup]="form" (ngSubmit)="entrar()">
+    <label>
+      E-mail
+      <input type="email" formControlName="email" autocomplete="username" />
+    </label>
+
+    <label>
+      Senha
+      <input type="password" formControlName="senha" autocomplete="current-password" />
+    </label>
+
+    @if (erro()) {
+      <p class="erro">{{ erro() }}</p>
+    }
+
+    <button type="submit" [disabled]="form.invalid">Entrar</button>
+  </form>
+</div>

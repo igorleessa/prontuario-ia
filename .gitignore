@@ -1,0 +1,20 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+
+# Node / Angular
+node_modules/
+dist/
+.angular/
+npm-debug.log*
+
+# Ambiente
+.env
+.env.local
+
+# IDE
+.vs/
+.vscode/
+.idea/

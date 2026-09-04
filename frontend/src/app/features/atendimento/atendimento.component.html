@@ -1,0 +1,78 @@
+<div class="atendimento">
+  <h1>Atendimento</h1>
+
+  @if (mensagem()) {
+    <p class="mensagem">{{ mensagem() }}</p>
+  }
+
+  @switch (etapa()) {
+    @case ('consentimento') {
+      <section>
+        <h2>Consentimento do paciente</h2>
+        <p>
+          Esta consulta será gravada para fins de documentação clínica. A gravação só é
+          iniciada após o aceite do paciente.
+        </p>
+        <button type="button" (click)="aceitarConsentimento()">Registrar consentimento</button>
+      </section>
+    }
+
+    @case ('gravacao') {
+      <section>
+        <h2>Gravação da consulta</h2>
+        @if (gravando()) {
+          <p>Gravando…</p>
+          <button type="button" (click)="pararGravacao()">Encerrar consulta</button>
+        } @else {
+          <button type="button" (click)="iniciarGravacao()">Iniciar gravação</button>
+        }
+      </section>
+    }
+
+    @case ('revisao') {
+      <section>
+        <h2>Revisão do prontuário</h2>
+        <p>Revise e edite cada campo antes de confirmar. Nada é salvo sem sua revisão.</p>
+
+        <form [formGroup]="form" (ngSubmit)="confirmar()">
+          <label>
+            Queixa principal
+            <textarea formControlName="queixaPrincipal" rows="2"></textarea>
+          </label>
+
+          <label>
+            História da doença atual
+            <textarea formControlName="hda" rows="4"></textarea>
+          </label>
+
+          <label>
+            Antecedentes
+            <textarea formControlName="antecedentes" rows="3"></textarea>
+          </label>
+
+          <label>
+            Exame físico
+            <textarea formControlName="exameFisico" rows="3"></textarea>
+          </label>
+
+          <label>
+            Hipótese diagnóstica
+            <textarea formControlName="hipoteseDiagnostica" rows="2"></textarea>
+          </label>
+
+          <label>
+            CID-10
+            <input type="text" formControlName="cid10Sugerido" />
+          </label>
+
+          <label>
+            Conduta
+            <textarea formControlName="conduta" rows="3"></textarea>
+          </label>
+
+          <button type="submit">Confirmar e finalizar</button>
+        </form>
+      </section>
+    }
+  }
+</div>

@@ -1,0 +1,28 @@
+.atendimento {
+  max-width: 48rem;
+  margin: 2rem auto;
+  padding: 0 1rem;
+
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  textarea,
+  input {
+    padding: 0.5rem;
+    font: inherit;
+  }
+
+  .mensagem {
+    padding: 0.75rem;
+    background: #eef2ff;
+  }
+}
