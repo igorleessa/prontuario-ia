@@ -34,7 +34,13 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      # Partes separadas: o backend monta a connection string com o builder do
+      # Npgsql, que escapa senhas contendo ";" ou "=".
+      Postgres__Host: postgres
+      Postgres__Port: "5432"
+      Postgres__Database: ${POSTGRES_DB}
+      Postgres__Username: ${POSTGRES_USER}
+      Postgres__Password: ${POSTGRES_PASSWORD}
       Database__AplicarMigrationsNaInicializacao: "true"
       Jwt__Key: ${JWT_KEY}
       Jwt__Issuer: ${JWT_ISSUER:-ProntuarioIA}
