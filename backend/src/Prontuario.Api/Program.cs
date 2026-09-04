@@ -2,6 +2,7 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Prontuario.Infrastructure;
+using Prontuario.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +13,14 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddInfrastructure(builder.Configuration);
 
 var jwtSection = builder.Configuration.GetSection("Jwt");
+var jwtKey = jwtSection["Key"];
+if (string.IsNullOrWhiteSpace(jwtKey) || Encoding.UTF8.GetByteCount(jwtKey) < 32)
+{
+    throw new InvalidOperationException(
+        "Jwt:Key ausente ou curta demais (minimo 32 bytes). Rode scripts/setup.sh (macOS/Linux) "
+        + "ou scripts/setup.ps1 (Windows) para gerar o .env com uma chave aleatoria.");
+}
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -23,7 +32,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             ValidIssuer = jwtSection["Issuer"],
             ValidAudience = jwtSection["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSection["Key"]!)),
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
         };
     });
 builder.Services.AddAuthorization();
@@ -37,13 +46,28 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// Em ambiente local o proprio start aplica as migrations e semeia os dados de
+// teste, para que "docker compose up" deixe o sistema pronto para uso.
+if (builder.Configuration.GetValue<bool>("Database:AplicarMigrationsNaInicializacao"))
+{
+    using var scope = app.Services.CreateScope();
+    var inicializador = scope.ServiceProvider.GetRequiredService<DatabaseInitializer>();
+    await inicializador.InicializarAsync();
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+// Em desenvolvimento o container sobe apenas em HTTP; redirecionar para HTTPS
+// quebraria as chamadas do frontend local.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
+
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();

@@ -17,8 +17,10 @@ public static class DependencyInjection
             options.UseNpgsql(configuration.GetConnectionString("Postgres")));
 
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
+        services.Configure<SeedOptions>(configuration.GetSection(SeedOptions.SectionName));
         services.AddSingleton<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<DatabaseInitializer>();
 
         services.AddScoped<ITranscriptionService, PlaceholderTranscriptionService>();
         services.AddScoped<IClinicalNoteGenerator, PlaceholderClinicalNoteGenerator>();

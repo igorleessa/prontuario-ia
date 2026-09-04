@@ -41,15 +41,46 @@ docs/                           plano e especificação
 
 ## Rodando localmente
 
-### Ambiente completo (Docker)
+### Setup automatizado (recomendado)
+
+O script pergunta usuário e senha do banco, gera a chave JWT, escreve o `.env`, sobe tudo no Docker e semeia uma clínica, um médico e um paciente para você já conseguir logar.
+
+**macOS / Linux:**
 
 ```bash
-docker compose up --build
+./scripts/setup.sh
 ```
 
-- API: http://localhost:8080 (Swagger em `/swagger`)
+**Windows (PowerShell):**
+
+```powershell
+.\scripts\setup.ps1
+```
+
+Para recriar o banco do zero (apaga os volumes):
+
+```bash
+./scripts/setup.sh --recriar      # macOS/Linux
+.\scripts\setup.ps1 -Recriar      # Windows
+```
+
+Ao final o script mostra os endereços e o e-mail de login. Por padrão:
+
 - Frontend: http://localhost:4200
+- API (Swagger): http://localhost:8080/swagger
 - MinIO console: http://localhost:9001
+
+O `.env` gerado contém segredos e está no `.gitignore` — não versione.
+
+Durante a execução você escolhe a **modalidade da clínica semeada** (Integrado ou Conector), o que permite testar os dois caminhos da aplicação. Para trocar depois, edite `SEED_MODO_OPERACAO` no `.env` e rode com `--recriar`.
+
+### Subindo manualmente
+
+Com o `.env` já criado:
+
+```bash
+docker compose up -d --build
+```
 
 ### Desenvolvimento
 
@@ -77,8 +108,12 @@ npm install
 npm start
 ```
 
+O `ng serve` usa `proxy.conf.json` para encaminhar `/api` ao backend em `localhost:8080` — se você mudou a porta da API no setup, ajuste esse arquivo.
+
 ## Estado atual
 
-Fase 0 (fundação) concluída: solution .NET com as quatro camadas, modelo de dados completo com migration inicial, autenticação JWT, resolver de modalidade, workspace Angular e Docker Compose.
+Fase 0 (fundação) concluída: solution .NET com as quatro camadas, modelo de dados completo com migration inicial, autenticação JWT, resolver de modalidade, workspace Angular, Docker Compose e scripts de setup para Windows e macOS/Linux.
+
+As migrations são aplicadas automaticamente no start quando `Database__AplicarMigrationsNaInicializacao` está ligado (o Compose liga por padrão no ambiente local).
 
 Os provedores de STT e LLM ainda não foram escolhidos (ver [especificação](docs/especificacao-mvp.md), seção 12). `PlaceholderTranscriptionService` e `PlaceholderClinicalNoteGenerator` implementam as interfaces e lançam `NotImplementedException` — basta trocar o registro em `DependencyInjection.cs` quando o fornecedor for definido.
