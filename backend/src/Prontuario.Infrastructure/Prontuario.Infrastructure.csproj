@@ -25,4 +25,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- O worker de IA e testado pelo metodo de processamento, sem passar pela fila. -->
+    <InternalsVisibleTo Include="Prontuario.Application.Tests" />
+  </ItemGroup>
+
 </Project>
