@@ -262,6 +262,8 @@
             }
           </div>
         </section>
+
+        <app-documentos [atendimentoId]="id()" />
       }
 
       @case ('encerrado') {
@@ -372,6 +374,8 @@
             </div>
           </div>
         </section>
+
+        <app-documentos [atendimentoId]="id()" [bloqueado]="true" />
       }
     }
   } @else if (carregando()) {

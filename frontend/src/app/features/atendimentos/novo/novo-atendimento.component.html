@@ -99,6 +99,27 @@
     </div>
   </div>
 
+  @if (modelos().length > 0) {
+    <div class="cartao">
+      <div class="cartao__corpo">
+        <div class="campo">
+          <label class="campo__rotulo" for="modelo">Modelo da nota</label>
+          <select id="modelo" [ngModel]="modeloEscolhido()"
+                  (ngModelChange)="modeloEscolhido.set($event)">
+            <option value="">Consulta geral (modelo padrão)</option>
+            @for (modelo of modelos(); track modelo.id) {
+              <option [value]="modelo.id">{{ modelo.nome }}</option>
+            }
+          </select>
+          <span class="campo__dica">
+            Orienta a IA sobre o que destacar em cada campo — o que se espera numa nota de
+            cardiologia é diferente do que se espera numa de pediatria.
+          </span>
+        </div>
+      </div>
+    </div>
+  }
+
   <div class="rodape">
     <span class="rodape__resumo">
       @if (selecionado(); as p) {

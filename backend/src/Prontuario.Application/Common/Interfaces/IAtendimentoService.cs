@@ -10,7 +10,9 @@ namespace Prontuario.Application.Common.Interfaces;
 public interface IAtendimentoService
 {
     /// <summary>Abre um atendimento vinculado a um paciente e ao medico logado (RF04). Null se o paciente nao e da clinica.</summary>
-    Task<Guid?> AbrirAsync(Guid pacienteRefId, Guid medicoId, Guid clinicaId, CancellationToken cancellationToken = default);
+    Task<Guid?> AbrirAsync(
+        Guid pacienteRefId, Guid medicoId, Guid clinicaId, Guid? templateNotaId = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Lista os atendimentos da clinica, do mais recente para o mais antigo.</summary>
     Task<IReadOnlyList<AtendimentoResumoDto>> ListarAsync(Guid clinicaId, CancellationToken cancellationToken = default);

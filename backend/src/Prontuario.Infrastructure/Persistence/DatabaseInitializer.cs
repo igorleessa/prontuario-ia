@@ -14,6 +14,31 @@ namespace Prontuario.Infrastructure.Persistence;
 /// </summary>
 public class DatabaseInitializer
 {
+    /// <summary>
+    /// Catalogo de templates: independe do seed de teste, porque e conteudo do
+    /// produto, nao dado de demonstracao. Idempotente por nome.
+    /// </summary>
+    private async Task SemearCatalogoTemplatesAsync(CancellationToken cancellationToken)
+    {
+        var existentes = await _db.TemplatesNota
+            .Where(t => t.ClinicaId == null)
+            .Select(t => t.Nome)
+            .ToListAsync(cancellationToken);
+
+        var novos = CatalogoTemplatesSeed.Modelos()
+            .Where(t => !existentes.Contains(t.Nome))
+            .ToList();
+
+        if (novos.Count == 0)
+        {
+            return;
+        }
+
+        _db.TemplatesNota.AddRange(novos);
+        await _db.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Catalogo de templates: {Total} modelos adicionados.", novos.Count);
+    }
+
     private readonly ApplicationDbContext _db;
     private readonly IPasswordHasher<Usuario> _passwordHasher;
     private readonly SeedOptions _seed;
@@ -35,6 +60,8 @@ public class DatabaseInitializer
     {
         await _db.Database.MigrateAsync(cancellationToken);
         _logger.LogInformation("Migrations aplicadas.");
+
+        await SemearCatalogoTemplatesAsync(cancellationToken);
 
         if (!_seed.Habilitado)
         {

@@ -1,0 +1,75 @@
+<section class="cartao">
+  <div class="cartao__corpo">
+    <h2>Documentos da consulta</h2>
+    <p class="secao__texto">
+      Receita, pedido de exame, atestado e encaminhamento redigidos a partir da mesma consulta.
+      Como a nota clínica, saem como rascunho — revise antes de entregar ao paciente.
+    </p>
+
+    @if (erro()) {
+      <p class="aviso aviso--erro" role="alert">{{ erro() }}</p>
+    }
+
+    @if (!bloqueado()) {
+      <div class="acoes">
+        @for (tipo of tipos; track tipo) {
+          <button type="button" class="botao botao--secundario" [disabled]="gerando() !== null"
+                  (click)="gerar(tipo)">
+            {{ gerando() === tipo ? 'Redigindo…' : 'Gerar ' + rotulo[tipo].toLowerCase() }}
+          </button>
+        }
+      </div>
+    }
+
+    @if (vazio()) {
+      <p class="secao__texto secao__texto--tenue">
+        @if (bloqueado()) {
+          Nenhum documento foi gerado neste atendimento.
+        } @else {
+          Nenhum documento gerado ainda.
+        }
+      </p>
+    } @else {
+      <ul class="documentos">
+        @for (documento of lista(); track documento.id) {
+          <li class="documento">
+            <button type="button" class="documento__topo" (click)="alternar(documento.id)"
+                    [attr.aria-expanded]="aberto() === documento.id">
+              <strong>{{ rotulo[documento.tipo] }}</strong>
+              @if (alterado(documento)) {
+                <span class="documento__marca">não salvo</span>
+              }
+              <span class="documento__seta" aria-hidden="true">
+                {{ aberto() === documento.id ? '−' : '+' }}
+              </span>
+            </button>
+
+            @if (aberto() === documento.id) {
+              <div class="documento__corpo">
+                @if (bloqueado()) {
+                  <pre class="documento__texto">{{ documento.conteudo }}</pre>
+                } @else {
+                  <textarea rows="10" [ngModel]="conteudo(documento)"
+                            (ngModelChange)="editar(documento.id, $event)"></textarea>
+                }
+
+                <div class="acoes">
+                  @if (!bloqueado()) {
+                    <button type="button" class="botao"
+                            [disabled]="!alterado(documento) || salvando() === documento.id"
+                            (click)="salvar(documento)">
+                      {{ salvando() === documento.id ? 'Salvando…' : 'Salvar revisão' }}
+                    </button>
+                  }
+                  <button type="button" class="botao botao--secundario" (click)="baixarPdf(documento)">
+                    Baixar PDF
+                  </button>
+                </div>
+              </div>
+            }
+          </li>
+        }
+      </ul>
+    }
+  </div>
+</section>

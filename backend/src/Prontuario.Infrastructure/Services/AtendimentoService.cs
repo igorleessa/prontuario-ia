@@ -35,7 +35,9 @@ public class AtendimentoService : IAtendimentoService
         _auditoria = auditoria;
     }
 
-    public async Task<Guid?> AbrirAsync(Guid pacienteRefId, Guid medicoId, Guid clinicaId, CancellationToken cancellationToken = default)
+    public async Task<Guid?> AbrirAsync(
+        Guid pacienteRefId, Guid medicoId, Guid clinicaId, Guid? templateNotaId = null,
+        CancellationToken cancellationToken = default)
     {
         var pacienteEhDaClinica = await _db.Pacientes
             .AnyAsync(p => p.Id == pacienteRefId && p.ClinicaId == clinicaId, cancellationToken);
@@ -45,10 +47,19 @@ public class AtendimentoService : IAtendimentoService
             return null;
         }
 
+        // Template inexistente ou de outra clinica cai no modelo generico, em vez
+        // de impedir a abertura do atendimento.
+        var template = templateNotaId is { } id
+            && await _db.TemplatesNota.AnyAsync(
+                t => t.Id == id && t.Ativo && (t.ClinicaId == null || t.ClinicaId == clinicaId), cancellationToken)
+                ? templateNotaId
+                : null;
+
         var atendimento = new Atendimento
         {
             PacienteRefId = pacienteRefId,
             MedicoId = medicoId,
+            TemplateNotaId = template,
             Status = StatusAtendimento.AguardandoConsentimento,
         };
 

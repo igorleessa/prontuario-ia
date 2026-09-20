@@ -19,8 +19,8 @@ export class AtendimentoService {
     return this.http.get<AtendimentoDetalhe>(`${this.baseUrl}/${atendimentoId}`);
   }
 
-  abrir(pacienteRefId: string): Observable<{ id: string }> {
-    return this.http.post<{ id: string }>(this.baseUrl, { pacienteRefId });
+  abrir(pacienteRefId: string, templateNotaId: string | null = null): Observable<{ id: string }> {
+    return this.http.post<{ id: string }>(this.baseUrl, { pacienteRefId, templateNotaId });
   }
 
   /** Envia o audio da consulta e dispara a transcricao e a extracao (RF06/RF07/RF08). */

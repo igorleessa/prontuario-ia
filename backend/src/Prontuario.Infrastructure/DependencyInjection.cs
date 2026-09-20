@@ -74,6 +74,9 @@ public static class DependencyInjection
 
         services.AddScoped<IAtendimentoService, AtendimentoService>();
         services.AddScoped<IPacienteService, PacienteService>();
+        services.AddScoped<ICatalogoTemplatesService, CatalogoTemplatesService>();
+        services.AddScoped<IDocumentoClinicoService, DocumentoClinicoService>();
+        services.AddScoped<IPerfilService, PerfilService>();
 
         return services;
     }

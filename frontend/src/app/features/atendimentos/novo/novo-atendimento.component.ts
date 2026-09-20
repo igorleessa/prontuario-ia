@@ -3,8 +3,10 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { Paciente } from '../../../core/models/paciente.model';
+import { TemplateNota } from '../../../core/models/template.model';
 import { AtendimentoService } from '../../../core/services/atendimento.service';
 import { PacienteService } from '../../../core/services/paciente.service';
+import { TemplateService } from '../../../core/services/template.service';
 
 @Component({
   selector: 'app-novo-atendimento',
@@ -16,6 +18,7 @@ import { PacienteService } from '../../../core/services/paciente.service';
 export class NovoAtendimentoComponent {
   private readonly pacientes = inject(PacienteService);
   private readonly atendimentos = inject(AtendimentoService);
+  private readonly templates = inject(TemplateService);
   private readonly router = inject(Router);
 
   readonly carregando = signal(true);
@@ -25,6 +28,10 @@ export class NovoAtendimentoComponent {
   readonly selecionado = signal<Paciente | null>(null);
   readonly abrindo = signal(false);
   readonly cadastrando = signal(false);
+
+  /** Modelo de nota da especialidade; vazio usa o modelo generico (SOAP). */
+  readonly modelos = signal<TemplateNota[]>([]);
+  readonly modeloEscolhido = signal<string>('');
 
   readonly filtrados = computed(() => {
     const termo = this.busca().trim().toLowerCase();
@@ -46,6 +53,12 @@ export class NovoAtendimentoComponent {
 
   constructor() {
     this.carregarPacientes();
+
+    // Falha no catalogo nao impede abrir atendimento: sem modelo, a extracao
+    // usa o prompt generico.
+    this.templates.listar().subscribe({
+      next: (modelos) => this.modelos.set(modelos),
+    });
   }
 
   carregarPacientes(): void {
@@ -110,7 +123,7 @@ export class NovoAtendimentoComponent {
     this.abrindo.set(true);
     this.erro.set(null);
 
-    this.atendimentos.abrir(paciente.id).subscribe({
+    this.atendimentos.abrir(paciente.id, this.modeloEscolhido() || null).subscribe({
       next: ({ id }) => this.router.navigate(['/atendimentos', id]),
       error: () => {
         this.abrindo.set(false);

@@ -20,6 +20,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<NotaExportavel> NotasExportaveis => Set<NotaExportavel>();
     public DbSet<LogAuditoria> LogsAuditoria => Set<LogAuditoria>();
     public DbSet<ConfiguracaoIA> ConfiguracoesIA => Set<ConfiguracaoIA>();
+    public DbSet<TemplateNota> TemplatesNota => Set<TemplateNota>();
+    public DbSet<DocumentoClinico> Documentos => Set<DocumentoClinico>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

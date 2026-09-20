@@ -26,6 +26,11 @@ export const routes: Routes = [
       import('./features/atendimento/atendimento.component').then((m) => m.AtendimentoComponent),
   },
   {
+    path: 'perfil',
+    canActivate: [authGuard],
+    loadComponent: () => import('./features/perfil/perfil.component').then((m) => m.PerfilComponent),
+  },
+  {
     path: 'auditoria',
     canActivate: [authGuard, adminGuard],
     loadComponent: () =>

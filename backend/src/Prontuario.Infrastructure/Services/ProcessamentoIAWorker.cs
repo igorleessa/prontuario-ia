@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Prontuario.Application.Common.Interfaces;
+using Prontuario.Application.Common.Models;
 using Prontuario.Domain.Entities;
 using Prontuario.Domain.Enums;
 using Prontuario.Infrastructure.Persistence;
@@ -66,6 +67,7 @@ public class ProcessamentoIAWorker : BackgroundService
         var atendimento = await db.Atendimentos
             .Include(a => a.GravacaoAudio)
             .Include(a => a.Medico)
+            .Include(a => a.TemplateNota)
             .SingleOrDefaultAsync(a => a.Id == atendimentoId, cancellationToken);
 
         if (atendimento?.GravacaoAudio is null)
@@ -106,7 +108,12 @@ public class ProcessamentoIAWorker : BackgroundService
         transcricao.Status = StatusProcessamento.Concluido;
         await db.SaveChangesAsync(cancellationToken);
 
-        var rascunho = await llm.GerarRascunhoAsync(transcricao.Texto, credenciais, cancellationToken);
+        // O template da especialidade e o estilo do medico moldam a redacao; o
+        // pipeline em si e o mesmo para toda consulta.
+        var contexto = new ContextoGeracao(
+            atendimento.TemplateNota?.Instrucoes, atendimento.Medico.InstrucoesEstilo);
+
+        var rascunho = await llm.GerarRascunhoAsync(transcricao.Texto, credenciais, contexto, cancellationToken);
 
         db.RascunhosIA.Add(new RascunhoIA
         {

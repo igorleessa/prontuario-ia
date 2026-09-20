@@ -12,6 +12,7 @@ import { RascunhoClinico } from '../../core/models/rascunho-clinico.model';
 import { AtendimentoService } from '../../core/services/atendimento.service';
 import { AuthService } from '../../core/services/auth.service';
 import { GravacaoAudioService } from '../../core/services/gravacao-audio.service';
+import { DocumentosComponent } from './documentos/documentos.component';
 
 type Etapa = 'consentimento' | 'gravacao' | 'processando' | 'revisao' | 'encerrado';
 
@@ -26,7 +27,7 @@ type Visao = 'estruturado' | 'nota';
 @Component({
   selector: 'app-atendimento',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, DatePipe],
+  imports: [ReactiveFormsModule, RouterLink, DatePipe, DocumentosComponent],
   templateUrl: './atendimento.component.html',
   styleUrl: './atendimento.component.scss',
 })

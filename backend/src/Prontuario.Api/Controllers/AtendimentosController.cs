@@ -25,7 +25,7 @@ public class AtendimentosController : ApiControllerBase
     /// <summary>Consulta longa em webm/opus fica na casa de poucos MB; 100 MB da folga sem virar porta aberta.</summary>
     private const long TamanhoMaximoAudioBytes = 100L * 1024 * 1024;
 
-    public record AbrirAtendimentoRequest(Guid PacienteRefId);
+    public record AbrirAtendimentoRequest(Guid PacienteRefId, Guid? TemplateNotaId);
 
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<AtendimentoResumoDto>>> Listar(CancellationToken cancellationToken)
@@ -41,7 +41,8 @@ public class AtendimentosController : ApiControllerBase
     [HttpPost]
     public async Task<IActionResult> Abrir(AbrirAtendimentoRequest request, CancellationToken cancellationToken)
     {
-        var id = await _atendimentos.AbrirAsync(request.PacienteRefId, UsuarioLogadoId, ClinicaId, cancellationToken);
+        var id = await _atendimentos.AbrirAsync(
+            request.PacienteRefId, UsuarioLogadoId, ClinicaId, request.TemplateNotaId, cancellationToken);
         if (id is null)
         {
             return NotFound(new { erro = "Paciente nao encontrado nesta clinica." });
