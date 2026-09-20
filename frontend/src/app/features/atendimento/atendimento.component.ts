@@ -10,6 +10,7 @@ import {
 import { NotaExportavel, ResultadoExportacao } from '../../core/models/exportacao.model';
 import { RascunhoClinico } from '../../core/models/rascunho-clinico.model';
 import { AtendimentoService } from '../../core/services/atendimento.service';
+import { AppConfigService } from '../../core/services/app-config.service';
 import { AuthService } from '../../core/services/auth.service';
 import { GravacaoAudioService } from '../../core/services/gravacao-audio.service';
 import { DocumentosComponent } from './documentos/documentos.component';
@@ -36,6 +37,7 @@ export class AtendimentoComponent {
   private readonly gravacaoAudio = inject(GravacaoAudioService);
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
+  private readonly configuracaoApp = inject(AppConfigService);
 
   /** Vem do parametro de rota via withComponentInputBinding(). */
   readonly id = input.required<string>();
@@ -59,6 +61,12 @@ export class AtendimentoComponent {
   readonly resultadoExportacao = signal<ResultadoExportacao | null>(null);
   readonly baixandoPdf = signal(false);
   readonly reprocessando = signal(false);
+  readonly simulando = signal(false);
+  readonly sugestaoIa = signal<RascunhoClinico | null>(null);
+  readonly mostrarSugestao = signal(false);
+
+  /** Botão de consulta simulada só aparece quando o servidor libera o modo demonstração. */
+  readonly demonstracao = this.configuracaoApp.demonstracao;
 
   readonly gravando = this.gravacaoAudio.gravando;
   readonly rotuloStatus = ROTULO_STATUS;
@@ -98,6 +106,7 @@ export class AtendimentoComponent {
   // O alias do @if nao alcanca o interior dos blocos @switch do template.
   readonly consentimentoEm = computed(() => this.atendimento()?.consentimentoEm ?? null);
   readonly finalizado = computed(() => this.atendimento()?.status === 'Finalizado');
+  readonly templateNome = computed(() => this.atendimento()?.templateNome ?? null);
 
   /** Formato que a clinica de fato exporta, usado apenas para orientar o medico. */
   readonly modoOperacao = computed(() => this.auth.usuario()?.modoOperacao ?? null);
@@ -144,6 +153,7 @@ export class AtendimentoComponent {
       next: (detalhe) => {
         this.atendimento.set(detalhe);
         this.transcricao.set(detalhe.transcricao);
+        this.sugestaoIa.set(detalhe.sugestaoIa);
         this.erroIA.set(detalhe.erroProcessamentoIA);
         this.form.patchValue({
           queixaPrincipal: detalhe.rascunho.queixaPrincipal ?? '',
@@ -266,6 +276,46 @@ export class AtendimentoComponent {
     this.atendimentos.iniciarRevisao(this.id()).subscribe({
       next: () => this.atualizarStatus('EmRevisao'),
       error: () => this.erro.set('Não foi possível avançar para a revisão.'),
+    });
+  }
+
+  /**
+   * Campos em que o texto atual difere do que a IA sugeriu. É o que transforma
+   * "a revisão humana é obrigatória" em algo visível na tela.
+   */
+  editadoPeloMedico(campo: keyof RascunhoClinico): boolean {
+    const sugestao = this.sugestaoIa();
+    if (!sugestao) {
+      return false;
+    }
+
+    const atual = (this.form.getRawValue()[campo] ?? '').trim();
+    return atual !== (sugestao[campo] ?? '').trim();
+  }
+
+  alternarSugestao(): void {
+    this.mostrarSugestao.update((valor) => !valor);
+  }
+
+  /** Roda o pipeline sobre a consulta de exemplo, sem depender de microfone. */
+  simularConsulta(): void {
+    if (this.simulando()) {
+      return;
+    }
+
+    this.simulando.set(true);
+    this.erro.set(null);
+
+    this.atendimentos.simular(this.id()).subscribe({
+      next: () => {
+        this.simulando.set(false);
+        this.atualizarStatus('ProcessandoIA');
+        this.acompanharProcessamento();
+      },
+      error: () => {
+        this.simulando.set(false);
+        this.erro.set('Não foi possível iniciar a consulta simulada.');
+      },
     });
   }
 

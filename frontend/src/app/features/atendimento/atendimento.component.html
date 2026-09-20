@@ -12,6 +12,9 @@
       <div class="cartao__corpo ficha__corpo">
         <div class="ficha__paciente">
           <h1>{{ a.pacienteNome }}</h1>
+          <a class="ficha__historico" [routerLink]="['/pacientes', a.pacienteId]">
+            Ver histórico do paciente
+          </a>
           <p class="ficha__meta">
             {{ a.dataHora | date: "dd 'de' MMMM 'de' y, HH:mm" }}
             · {{ a.medicoNome }}
@@ -106,7 +109,20 @@
                 <button type="button" class="botao botao--secundario" (click)="pularGravacao()">
                   Preencher manualmente
                 </button>
+                @if (demonstracao()) {
+                  <button type="button" class="botao botao--discreto" [disabled]="simulando()"
+                          (click)="simularConsulta()">
+                    {{ simulando() ? 'Iniciando…' : 'Simular consulta' }}
+                  </button>
+                }
               </div>
+
+              @if (demonstracao()) {
+                <p class="acoes__nota">
+                  A consulta simulada usa uma gravação fictícia de exemplo — serve para demonstrar o
+                  fluxo sem depender de microfone.
+                </p>
+              }
             }
           </div>
         </section>
@@ -158,6 +174,7 @@
             } @else if (transcricao()) {
               <p class="aviso aviso--info">
                 Rascunho gerado por IA a partir do áudio. Revise cada campo — nada é salvo sem sua confirmação.
+                @if (templateNome(); as modelo) { Modelo: {{ modelo }}. }
               </p>
             }
 
@@ -196,28 +213,53 @@
             @if (visao() === 'estruturado') {
             <form [formGroup]="form" (ngSubmit)="confirmar()" novalidate>
               <div class="campo">
-                <label class="campo__rotulo" for="queixa">Queixa principal</label>
+                <label class="campo__rotulo" for="queixa">
+                  Queixa principal
+                  @if (editadoPeloMedico('queixaPrincipal')) {
+                    <span class="campo__marca">editado por você</span>
+                  }
+                </label>
                 <textarea id="queixa" formControlName="queixaPrincipal" rows="2"></textarea>
               </div>
 
               <div class="campo">
-                <label class="campo__rotulo" for="hda">História da doença atual</label>
+                <label class="campo__rotulo" for="hda">
+                  História da doença atual
+                  @if (editadoPeloMedico('hda')) {
+                    <span class="campo__marca">editado por você</span>
+                  }
+                </label>
                 <textarea id="hda" formControlName="hda" rows="5"></textarea>
               </div>
 
               <div class="campo">
-                <label class="campo__rotulo" for="antecedentes">Antecedentes</label>
+                <label class="campo__rotulo" for="antecedentes">
+                  Antecedentes
+                  @if (editadoPeloMedico('antecedentes')) {
+                    <span class="campo__marca">editado por você</span>
+                  }
+                </label>
                 <textarea id="antecedentes" formControlName="antecedentes" rows="3"></textarea>
               </div>
 
               <div class="campo">
-                <label class="campo__rotulo" for="exame">Exame físico</label>
+                <label class="campo__rotulo" for="exame">
+                  Exame físico
+                  @if (editadoPeloMedico('exameFisico')) {
+                    <span class="campo__marca">editado por você</span>
+                  }
+                </label>
                 <textarea id="exame" formControlName="exameFisico" rows="3"></textarea>
               </div>
 
               <div class="dupla">
                 <div class="campo">
-                  <label class="campo__rotulo" for="hipotese">Hipótese diagnóstica</label>
+                  <label class="campo__rotulo" for="hipotese">
+                  Hipótese diagnóstica
+                  @if (editadoPeloMedico('hipoteseDiagnostica')) {
+                    <span class="campo__marca">editado por você</span>
+                  }
+                </label>
                   <textarea id="hipotese" formControlName="hipoteseDiagnostica" rows="2"></textarea>
                 </div>
 
@@ -229,9 +271,37 @@
               </div>
 
               <div class="campo">
-                <label class="campo__rotulo" for="conduta">Conduta</label>
+                <label class="campo__rotulo" for="conduta">
+                  Conduta
+                  @if (editadoPeloMedico('conduta')) {
+                    <span class="campo__marca">editado por você</span>
+                  }
+                </label>
                 <textarea id="conduta" formControlName="conduta" rows="4"></textarea>
               </div>
+
+              @if (sugestaoIa(); as sugestao) {
+                <div class="comparativo">
+                  <button type="button" class="botao botao--discreto" (click)="alternarSugestao()">
+                    {{ mostrarSugestao() ? 'Ocultar sugestão original' : 'Comparar com a sugestão da IA' }}
+                  </button>
+
+                  @if (mostrarSugestao()) {
+                    <dl class="comparativo__lista">
+                      <div><dt>Queixa principal</dt><dd>{{ sugestao.queixaPrincipal || '—' }}</dd></div>
+                      <div><dt>História da doença atual</dt><dd>{{ sugestao.hda || '—' }}</dd></div>
+                      <div><dt>Antecedentes</dt><dd>{{ sugestao.antecedentes || '—' }}</dd></div>
+                      <div><dt>Exame físico</dt><dd>{{ sugestao.exameFisico || '—' }}</dd></div>
+                      <div><dt>Hipótese diagnóstica</dt><dd>{{ sugestao.hipoteseDiagnostica || '—' }}</dd></div>
+                      <div><dt>CID-10</dt><dd>{{ sugestao.cid10Sugerido || '—' }}</dd></div>
+                      <div><dt>Conduta</dt><dd>{{ sugestao.conduta || '—' }}</dd></div>
+                    </dl>
+                    <p class="comparativo__nota">
+                      Texto original proposto pela IA. O que vale é o que está no formulário acima.
+                    </p>
+                  }
+                </div>
+              }
 
               <div class="acoes acoes--rodape">
                 <button type="submit" class="botao" [disabled]="salvando()">

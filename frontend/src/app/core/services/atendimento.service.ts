@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { AtendimentoDetalhe, AtendimentoResumo } from '../models/atendimento.model';
+import { AtendimentoDetalhe, AtendimentoResumo, MetricasClinica } from '../models/atendimento.model';
 import { NotaExportavel, ResultadoExportacao } from '../models/exportacao.model';
 import { RascunhoClinico } from '../models/rascunho-clinico.model';
 
@@ -52,6 +52,16 @@ export class AtendimentoService {
    */
   preverNota(revisado: RascunhoClinico): Observable<{ conteudo: string }> {
     return this.http.post<{ conteudo: string }>(`${this.baseUrl}/nota-previa`, revisado);
+  }
+
+  /** Números da clínica para a tela inicial (tempo economizado é estimativa). */
+  metricas(): Observable<MetricasClinica> {
+    return this.http.get<MetricasClinica>(`${this.baseUrl}/metricas`);
+  }
+
+  /** Roda o pipeline sobre a consulta de exemplo, sem microfone — modo demonstração. */
+  simular(atendimentoId: string): Observable<void> {
+    return this.http.post<void>(`${this.baseUrl}/${atendimentoId}/simular`, {});
   }
 
   /** Refaz a transcrição e a extração do áudio já gravado, sem duplicar o atendimento (RF13). */

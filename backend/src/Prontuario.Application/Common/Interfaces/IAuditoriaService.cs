@@ -36,6 +36,7 @@ public static class AcoesAuditoria
     public const string AtendimentoCancelado = "atendimento.cancelado";
     public const string NotaExportada = "nota.exportada";
     public const string NotaBaixadaPdf = "nota.pdf";
+    public const string ConsultaSimulada = "consulta.simulada";
     public const string DocumentoGerado = "documento.gerado";
     public const string DocumentoRevisado = "documento.revisado";
     public const string ConfiguracaoAlterada = "configuracao.alterada";

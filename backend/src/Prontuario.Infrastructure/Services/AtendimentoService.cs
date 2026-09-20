@@ -89,6 +89,8 @@ public class AtendimentoService : IAtendimentoService
             .Include(a => a.PacienteRef)
             .Include(a => a.Medico)
             .Include(a => a.Prontuario)
+            .Include(a => a.TemplateNota)
+            .Include(a => a.GravacaoAudio)
             .SingleOrDefaultAsync(a => a.Id == atendimentoId, cancellationToken);
 
         if (atendimento is null)
@@ -110,8 +112,11 @@ public class AtendimentoService : IAtendimentoService
             atendimento.ConsentimentoGravacao,
             atendimento.ConsentimentoEm,
             await ObterRascunhoAsync(atendimento, cancellationToken),
+            await ObterSugestaoIAAsync(atendimento.Id, cancellationToken),
             await ObterTranscricaoAsync(atendimento.Id, cancellationToken),
-            atendimento.ErroProcessamentoIA);
+            atendimento.ErroProcessamentoIA,
+            atendimento.TemplateNota?.Nome,
+            atendimento.GravacaoAudio?.DuracaoSegundos);
     }
 
     public async Task<bool> RegistrarConsentimentoAsync(Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default)
@@ -213,6 +218,53 @@ public class AtendimentoService : IAtendimentoService
         await _auditoria.RegistrarAsync(
             AcoesAuditoria.RegistroConfirmado, atendimentoId, cancellationToken: cancellationToken);
 
+        return ResultadoAtendimento.Ok;
+    }
+
+    public async Task<ResultadoAtendimento> SimularConsultaAsync(
+        Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default)
+    {
+        var atendimento = await DaClinica(clinicaId)
+            .Include(a => a.GravacaoAudio)
+            .SingleOrDefaultAsync(a => a.Id == atendimentoId, cancellationToken);
+
+        if (atendimento is null)
+        {
+            return ResultadoAtendimento.NaoEncontrado;
+        }
+
+        if (atendimento.Status is StatusAtendimento.Finalizado or StatusAtendimento.Cancelado)
+        {
+            return ResultadoAtendimento.Conflito;
+        }
+
+        var chave = ConsultaExemplo.PrefixoStorage + atendimentoId;
+
+        if (atendimento.GravacaoAudio is { } existente)
+        {
+            existente.StoragePath = chave;
+            existente.DuracaoSegundos = ConsultaExemplo.DuracaoSegundos;
+        }
+        else
+        {
+            _db.GravacoesAudio.Add(new GravacaoAudio
+            {
+                AtendimentoId = atendimentoId,
+                StoragePath = chave,
+                DuracaoSegundos = ConsultaExemplo.DuracaoSegundos,
+            });
+        }
+
+        atendimento.ConsentimentoGravacao = true;
+        atendimento.ConsentimentoEm ??= DateTime.UtcNow;
+        atendimento.Status = StatusAtendimento.ProcessandoIA;
+        atendimento.ErroProcessamentoIA = null;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        await _auditoria.RegistrarAsync(
+            AcoesAuditoria.ConsultaSimulada, atendimentoId, cancellationToken: cancellationToken);
+
+        await _fila.EnfileirarAsync(atendimentoId, cancellationToken);
         return ResultadoAtendimento.Ok;
     }
 
@@ -359,6 +411,62 @@ public class AtendimentoService : IAtendimentoService
 
     private Task<Atendimento?> BuscarAsync(Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken)
         => DaClinica(clinicaId).SingleOrDefaultAsync(a => a.Id == atendimentoId, cancellationToken);
+
+    /// <summary>
+    /// Sugestao original da IA, independentemente do que o medico gravou depois.
+    /// E o outro lado do comparativo da tela de revisao.
+    /// </summary>
+    private async Task<RascunhoClinicoDto?> ObterSugestaoIAAsync(Guid atendimentoId, CancellationToken cancellationToken)
+    {
+        var rascunho = await _db.RascunhosIA
+            .Where(r => r.Transcricao!.GravacaoAudio!.AtendimentoId == atendimentoId)
+            .OrderByDescending(r => r.CriadoEm)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return rascunho is null
+            ? null
+            : new RascunhoClinicoDto(
+                rascunho.QueixaPrincipal, rascunho.Hda, rascunho.Antecedentes, rascunho.ExameFisico,
+                rascunho.HipoteseDiagnostica, rascunho.Cid10Sugerido, rascunho.Conduta);
+    }
+
+    public async Task<MetricasClinicaDto> ObterMetricasAsync(
+        Guid clinicaId, int minutosDocumentacaoManual, CancellationToken cancellationToken = default)
+    {
+        var finalizados = await DaClinica(clinicaId)
+            .Where(a => a.Status == StatusAtendimento.Finalizado)
+            .Select(a => new
+            {
+                Duracao = a.GravacaoAudio != null ? a.GravacaoAudio.DuracaoSegundos : 0,
+                InicioRevisao = a.GravacaoAudio != null ? (DateTime?)a.GravacaoAudio.CriadoEm : null,
+                // O fim da revisao e a assinatura (Modalidade A) ou a revisao da
+                // nota (Modalidade B) - so uma das duas existe por atendimento.
+                Confirmacao = a.Prontuario != null ? a.Prontuario.AssinadoEm
+                    : a.NotaExportavel != null ? a.NotaExportavel.RevisadaEm
+                    : null,
+            })
+            .ToListAsync(cancellationToken);
+
+        var revisoes = finalizados
+            .Where(a => a.InicioRevisao is not null && a.Confirmacao is not null)
+            .Select(a => (a.Confirmacao!.Value - a.InicioRevisao!.Value).TotalSeconds)
+            .Where(segundos => segundos is > 0 and < 7200)
+            .ToList();
+
+        var tempoMedio = revisoes.Count > 0 ? (int)revisoes.Average() : (int?)null;
+
+        var economia = tempoMedio is { } medio && minutosDocumentacaoManual > 0
+            ? (int?)Math.Round(
+                Math.Clamp(100 - (medio * 100.0 / (minutosDocumentacaoManual * 60)), 0, 100))
+            : null;
+
+        return new MetricasClinicaDto(
+            finalizados.Count,
+            (int)Math.Round(finalizados.Sum(a => a.Duracao) / 60.0),
+            tempoMedio,
+            minutosDocumentacaoManual,
+            economia);
+    }
 
     private Task<string?> ObterTranscricaoAsync(Guid atendimentoId, CancellationToken cancellationToken)
         => _db.Transcricoes

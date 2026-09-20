@@ -186,6 +186,12 @@ MINIO_CONSOLE_PORT=9001
 # Dias que o audio bruto fica guardado depois de transcrito (LGPD).
 AUDIO_RETENCAO_DIAS=30
 
+# Botao "Simular consulta" na tela do atendimento (demonstracao ao cliente).
+DEMONSTRACAO_HABILITADA=true
+
+# Linha de base de documentacao manual usada no calculo de tempo economizado.
+MINUTOS_DOCUMENTACAO_MANUAL=7
+
 BACKEND_PORT=$BackendPort
 FRONTEND_PORT=$FrontendPort
 

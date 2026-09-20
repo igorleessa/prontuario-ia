@@ -99,12 +99,24 @@ public class ProcessamentoIAWorker : BackgroundService
         db.Transcricoes.Add(transcricao);
         await db.SaveChangesAsync(cancellationToken);
 
-        var armazenamento = provedor.GetRequiredService<IArmazenamentoAudio>();
-        var stt = provedor.GetRequiredService<ITranscriptionService>();
         var llm = provedor.GetRequiredService<IClinicalNoteGenerator>();
 
-        await using var audio = await armazenamento.AbrirAsync(atendimento.GravacaoAudio.StoragePath, cancellationToken);
-        transcricao.Texto = await stt.TranscreverAsync(audio, credenciais, cancellationToken);
+        // Consulta simulada (modo demonstracao) ja chega com o texto pronto: o
+        // que se quer mostrar e a extracao, nao a captura de audio.
+        if (atendimento.GravacaoAudio.StoragePath.StartsWith(ConsultaExemplo.PrefixoStorage, StringComparison.Ordinal))
+        {
+            transcricao.Texto = ConsultaExemplo.Transcricao;
+        }
+        else
+        {
+            var armazenamento = provedor.GetRequiredService<IArmazenamentoAudio>();
+            var stt = provedor.GetRequiredService<ITranscriptionService>();
+
+            await using var audio = await armazenamento.AbrirAsync(
+                atendimento.GravacaoAudio.StoragePath, cancellationToken);
+            transcricao.Texto = await stt.TranscreverAsync(audio, credenciais, cancellationToken);
+        }
+
         transcricao.Status = StatusProcessamento.Concluido;
         await db.SaveChangesAsync(cancellationToken);
 

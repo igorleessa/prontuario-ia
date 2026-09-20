@@ -31,6 +31,19 @@ public class AtendimentosController : ApiControllerBase
     public async Task<ActionResult<IReadOnlyList<AtendimentoResumoDto>>> Listar(CancellationToken cancellationToken)
         => Ok(await _atendimentos.ListarAsync(ClinicaId, cancellationToken));
 
+    /// <summary>
+    /// Numeros da clinica para a tela inicial. A linha de base de documentacao
+    /// manual e configuravel: cada especialidade tem a sua, e o numero precisa
+    /// ser do cliente, nao nosso.
+    /// </summary>
+    [HttpGet("metricas")]
+    public async Task<ActionResult<MetricasClinicaDto>> Metricas(
+        [FromServices] IConfiguration configuracao, CancellationToken cancellationToken)
+    {
+        var baseline = configuracao.GetValue("Metricas:MinutosDocumentacaoManual", 7);
+        return Ok(await _atendimentos.ObterMetricasAsync(ClinicaId, baseline, cancellationToken));
+    }
+
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<AtendimentoDetalheDto>> Obter(Guid id, CancellationToken cancellationToken)
     {
@@ -91,6 +104,27 @@ public class AtendimentosController : ApiControllerBase
             }),
             _ => NotFound(),
         };
+
+    /// <summary>
+    /// Roda o pipeline sobre a consulta de exemplo, sem microfone nem upload.
+    /// Existe para a demonstracao ao cliente; so responde com Demonstracao:Habilitado.
+    /// </summary>
+    [HttpPost("{id:guid}/simular")]
+    public async Task<IActionResult> Simular(
+        Guid id, [FromServices] IConfiguration configuracao, CancellationToken cancellationToken)
+    {
+        if (!configuracao.GetValue<bool>("Demonstracao:Habilitado"))
+        {
+            return NotFound();
+        }
+
+        return await _atendimentos.SimularConsultaAsync(id, ClinicaId, cancellationToken) switch
+        {
+            ResultadoAtendimento.Ok => Accepted(),
+            ResultadoAtendimento.Conflito => Conflict(new { erro = "Este atendimento ja foi encerrado." }),
+            _ => NotFound(),
+        };
+    }
 
     /// <summary>Refaz a transcricao e a extracao do audio ja gravado (RF13), sem duplicar o atendimento.</summary>
     [HttpPost("{id:guid}/reprocessar")]

@@ -62,6 +62,11 @@ services:
       # Dias que o audio bruto fica guardado depois de transcrito (LGPD).
       # Zero mantem as gravacoes ate expurgo manual.
       ArmazenamentoAudio__RetencaoDias: ${AUDIO_RETENCAO_DIAS:-30}
+      # Libera o botao "Simular consulta", que roda o pipeline sobre uma consulta
+      # ficticia - a demonstracao deixa de depender de microfone e de rede.
+      Demonstracao__Habilitado: ${DEMONSTRACAO_HABILITADA:-true}
+      # Linha de base de documentacao manual usada no calculo de tempo economizado.
+      Metricas__MinutosDocumentacaoManual: ${MINUTOS_DOCUMENTACAO_MANUAL:-7}
       # As chaves de API das clinicas sao cifradas com o Data Protection; o
       # chaveiro fica em volume para sobreviver a recriacao do container.
       DataProtection__Caminho: /chaves

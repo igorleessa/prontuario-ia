@@ -1,0 +1,74 @@
+<div class="pagina">
+  <a class="voltar" routerLink="/atendimentos">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
+      <path d="m15 18-6-6 6-6" />
+    </svg>
+    Atendimentos
+  </a>
+
+  @if (erro()) {
+    <p class="aviso aviso--erro" role="alert">{{ erro() }}</p>
+  }
+
+  @if (carregando()) {
+    <div class="cartao"><div class="vazio">Carregando histórico…</div></div>
+  } @else {
+    @if (historico(); as h) {
+    <header class="ficha cartao">
+      <div class="cartao__corpo">
+        <h1>{{ h.pacienteNome }}</h1>
+        <p class="ficha__meta">
+          @if (h.cpf) { CPF {{ h.cpf }} }
+          @if (h.cpf && idade()) { · }
+          @if (idade()) { {{ idade() }} }
+          @if (h.idExternoEmr) { · ID no EMR {{ h.idExternoEmr }} }
+          @if (!h.cpf && !idade() && !h.idExternoEmr) { Sem dados adicionais }
+        </p>
+      </div>
+    </header>
+
+    <div class="cartao">
+      <div class="cartao__corpo">
+        <h2>Atendimentos</h2>
+
+        @if (h.atendimentos.length === 0) {
+          <div class="vazio">
+            <span class="vazio__titulo">Nenhum atendimento</span>
+            <p>Este paciente ainda não passou por uma consulta neste sistema.</p>
+          </div>
+        } @else {
+          <ol class="linha-do-tempo">
+            @for (atendimento of h.atendimentos; track atendimento.id) {
+              <li class="evento">
+                <span class="evento__marca" aria-hidden="true"></span>
+                <a class="evento__corpo" [routerLink]="['/atendimentos', atendimento.id]">
+                  <div class="evento__topo">
+                    <strong>{{ atendimento.dataHora | date: "dd 'de' MMMM 'de' y, HH:mm" }}</strong>
+                    <span class="selo selo--{{ classeStatus[atendimento.status] }}">
+                      {{ rotuloStatus[atendimento.status] }}
+                    </span>
+                  </div>
+
+                  <p class="evento__medico">{{ atendimento.medicoNome }}</p>
+
+                  @if (atendimento.queixaPrincipal) {
+                    <p class="evento__campo">
+                      <span>Queixa</span> {{ atendimento.queixaPrincipal }}
+                    </p>
+                  }
+                  @if (atendimento.hipoteseDiagnostica) {
+                    <p class="evento__campo">
+                      <span>Hipótese</span> {{ atendimento.hipoteseDiagnostica }}
+                    </p>
+                  }
+                </a>
+              </li>
+            }
+          </ol>
+        }
+      </div>
+    </div>
+    }
+  }
+</div>

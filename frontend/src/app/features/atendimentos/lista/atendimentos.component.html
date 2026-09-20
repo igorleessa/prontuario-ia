@@ -24,6 +24,41 @@
     <p class="aviso aviso--erro" role="alert">{{ erro() }}</p>
   }
 
+  @if (metricas(); as m) {
+    @if (m.atendimentosFinalizados > 0) {
+      <div class="indicadores">
+        <div class="indicador">
+          <span class="indicador__valor">{{ m.atendimentosFinalizados }}</span>
+          <span class="indicador__rotulo">atendimentos documentados</span>
+        </div>
+
+        <div class="indicador">
+          <span class="indicador__valor">{{ m.minutosDeConsultaDocumentados }} min</span>
+          <span class="indicador__rotulo">de consulta transcritos</span>
+        </div>
+
+        @if (tempoMedioFormatado(); as tempo) {
+          <div class="indicador">
+            <span class="indicador__valor">{{ tempo }}</span>
+            <span class="indicador__rotulo">
+              da gravação à confirmação, em média
+            </span>
+          </div>
+        }
+
+        @if (m.economiaPercentualEstimada !== null) {
+          <div class="indicador indicador--destaque">
+            <span class="indicador__valor">{{ m.economiaPercentualEstimada }}%</span>
+            <span class="indicador__rotulo">
+              menos tempo que os {{ m.minutosDocumentacaoManualEstimados }} min estimados de
+              digitação manual
+            </span>
+          </div>
+        }
+      </div>
+    }
+  }
+
   <div class="filtros">
     <div class="abas" role="tablist">
       <button type="button" role="tab" [attr.aria-selected]="aba() === 'emAndamento'"

@@ -46,12 +46,26 @@ public interface IAtendimentoService
     /// Reenfileira a transcricao e a extracao do audio ja gravado (RF13), sem
     /// duplicar o atendimento. Conflito quando nao ha audio ou o registro ja foi encerrado.
     /// </summary>
+    /// <summary>
+    /// Injeta a consulta de exemplo e dispara o pipeline, sem microfone nem
+    /// upload. Usado na demonstracao ao cliente; o restante do fluxo e o mesmo.
+    /// </summary>
+    Task<ResultadoAtendimento> SimularConsultaAsync(
+        Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default);
+
     Task<ResultadoAtendimento> ReprocessarAsync(
         Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default);
 
     Task<bool> CancelarAsync(Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default);
 
     /// <summary>Estado da nota clinica exportavel do atendimento (RF20). Null quando o atendimento nao existe na clinica.</summary>
+    /// <summary>
+    /// Numeros da clinica para a tela inicial. O tempo economizado e estimativa
+    /// declarada, comparada com a linha de base recebida por parametro.
+    /// </summary>
+    Task<MetricasClinicaDto> ObterMetricasAsync(
+        Guid clinicaId, int minutosDocumentacaoManual, CancellationToken cancellationToken = default);
+
     Task<NotaExportavelDto?> ObterNotaAsync(Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default);
 
     /// <summary>Reenvia ao EMR de destino uma nota ja revisada (RF19), para o caso de o envio automatico ter falhado.</summary>
