@@ -99,6 +99,13 @@ e semeia uma clínica, um médico, um administrador e um paciente.
 
 Para recriar o banco do zero (apaga os volumes): `./scripts/setup.sh --recriar`.
 
+Para não apresentar o sistema vazio, popule pacientes e atendimentos de teste:
+
+```bash
+python3 scripts/dados-demo.py            # rápido, sem custo de IA
+python3 scripts/dados-demo.py --com-ia   # inclui consultas processadas pela IA de verdade
+```
+
 Ao final o script mostra os endereços e os dois logins:
 
 - Frontend: http://localhost:4200
