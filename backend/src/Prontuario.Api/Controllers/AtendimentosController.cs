@@ -12,11 +12,14 @@ public class AtendimentosController : ApiControllerBase
 {
     private readonly IAtendimentoService _atendimentos;
     private readonly INotaClinicaFormatter _formatador;
+    private readonly IGeradorPdfNota _pdf;
 
-    public AtendimentosController(IAtendimentoService atendimentos, INotaClinicaFormatter formatador)
+    public AtendimentosController(
+        IAtendimentoService atendimentos, INotaClinicaFormatter formatador, IGeradorPdfNota pdf)
     {
         _atendimentos = atendimentos;
         _formatador = formatador;
+        _pdf = pdf;
     }
 
     /// <summary>Consulta longa em webm/opus fica na casa de poucos MB; 100 MB da folga sem virar porta aberta.</summary>
@@ -89,6 +92,51 @@ public class AtendimentosController : ApiControllerBase
     [HttpPost("nota-previa")]
     public ActionResult<object> PreverNota(RascunhoClinicoDto revisado)
         => Ok(new { conteudo = _formatador.Formatar(revisado) });
+
+    /// <summary>
+    /// Nota clinica gravada do atendimento e o estado da exportacao (RF20).
+    /// E a fonte da verdade do que foi - ou sera - enviado ao EMR de destino.
+    /// </summary>
+    [HttpGet("{id:guid}/nota")]
+    public async Task<ActionResult<NotaExportavelDto>> ObterNota(Guid id, CancellationToken cancellationToken)
+    {
+        var nota = await _atendimentos.ObterNotaAsync(id, ClinicaId, cancellationToken);
+        return nota is null ? NotFound() : Ok(nota);
+    }
+
+    /// <summary>Reenvia a nota ao webhook da clinica (RF19) quando o envio automatico falhou.</summary>
+    [HttpPost("{id:guid}/exportar")]
+    public async Task<ActionResult<ResultadoExportacaoDto>> Exportar(Guid id, CancellationToken cancellationToken)
+    {
+        var resultado = await _atendimentos.ExportarAsync(id, ClinicaId, cancellationToken);
+        return resultado is null ? NotFound() : Ok(resultado);
+    }
+
+    /// <summary>Baixa a nota clinica em PDF (RF18), para anexar ou imprimir no EMR do cliente.</summary>
+    [HttpGet("{id:guid}/nota.pdf")]
+    public async Task<IActionResult> BaixarNotaPdf(Guid id, CancellationToken cancellationToken)
+    {
+        var dados = await _atendimentos.ObterDadosPdfAsync(id, ClinicaId, cancellationToken);
+        if (dados is null)
+        {
+            return NotFound();
+        }
+
+        var arquivo = $"nota-{dados.DataHora:yyyy-MM-dd}-{Sanitizar(dados.PacienteNome)}.pdf";
+        return File(_pdf.Gerar(dados), "application/pdf", arquivo);
+    }
+
+    /// <summary>Nome de arquivo sem acentos, espacos ou barras - alguns navegadores e EMRs nao lidam bem com eles.</summary>
+    private static string Sanitizar(string nome)
+    {
+        var normalizado = new string(nome.Normalize(System.Text.NormalizationForm.FormD)
+            .Where(c => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c)
+                != System.Globalization.UnicodeCategory.NonSpacingMark)
+            .Select(c => char.IsLetterOrDigit(c) ? char.ToLowerInvariant(c) : '-')
+            .ToArray());
+
+        return string.Join('-', normalizado.Split('-', StringSplitOptions.RemoveEmptyEntries));
+    }
 
     [HttpPost("{id:guid}/cancelar")]
     public async Task<IActionResult> Cancelar(Guid id, CancellationToken cancellationToken)

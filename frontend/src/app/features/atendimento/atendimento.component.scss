@@ -330,3 +330,45 @@ form {
   line-height: 1.6;
   white-space: pre-wrap;
 }
+
+/* Estado da entrega ao EMR na Modalidade B: o medico precisa saber, sem clicar
+   em nada, se a nota chegou ao sistema de destino ou se ficou parada aqui. */
+.entrega {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie-2);
+
+  strong {
+    display: block;
+    font-size: 0.9375rem;
+    font-weight: 580;
+  }
+
+  small {
+    font-size: 0.8125rem;
+    color: var(--texto-tenue);
+    overflow-wrap: anywhere;
+  }
+}
+
+.entrega__ponto {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--texto-tenue);
+}
+
+.entrega--ok {
+  border-color: color-mix(in srgb, var(--sucesso) 35%, transparent);
+  background: var(--sucesso-suave);
+
+  strong { color: var(--sucesso); }
+
+  .entrega__ponto { background: var(--sucesso); }
+}

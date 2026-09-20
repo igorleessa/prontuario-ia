@@ -148,6 +148,9 @@ if (-not $PularPerguntas) {
     Write-Info 'Gerando chave JWT aleatoria...'
     $JwtKey = New-ChaveAleatoria
 
+    # Segredo do webhook usado pelo EMR de demonstracao para conferir a assinatura.
+    $EmrDemoSecret = (New-ChaveAleatoria) -replace '[^A-Za-z0-9]', ''
+
     $agora = (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd HH:mm:ss')
     $conteudo = @"
 # Gerado por scripts/setup.ps1 em $agora UTC
@@ -177,6 +180,12 @@ MINIO_CONSOLE_PORT=9001
 
 BACKEND_PORT=$BackendPort
 FRONTEND_PORT=$FrontendPort
+
+# EMR ficticio da demonstracao: recebe a nota pelo webhook e a exibe como se
+# fosse o prontuario do cliente. O segredo e o mesmo que se cadastra na tela
+# de Configuracoes > Exportacao para o EMR.
+EMR_DEMO_PORT=9080
+EMR_DEMO_SECRET=$EmrDemoSecret
 "@
 
     # UTF8 sem BOM: o Docker Compose nao interpreta BOM no .env.
@@ -226,6 +235,11 @@ try {
         Write-Host "  Frontend:       http://localhost:$($config['FRONTEND_PORT'])"
         Write-Host "  API (Swagger):  http://localhost:$backendPort/swagger"
         Write-Host "  MinIO console:  http://localhost:$($config['MINIO_CONSOLE_PORT'])"
+        Write-Host "  EMR de demo:    http://localhost:$($config['EMR_DEMO_PORT'])"
+        Write-Host ""
+        Write-Host "  Para demonstrar a modalidade Conector, cadastre em Configuracoes:"
+        Write-Host "    Webhook:      http://emr-demo:8080/webhook"
+        Write-Host "    Segredo:      $($config['EMR_DEMO_SECRET'])"
         Write-Host ''
         Write-Host "  Login:          $($config['SEED_EMAIL'])"
         Write-Host "  Modalidade:     $($config['SEED_MODO_OPERACAO'])"

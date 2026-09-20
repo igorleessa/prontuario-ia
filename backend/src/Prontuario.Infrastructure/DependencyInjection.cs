@@ -52,9 +52,23 @@ public static class DependencyInjection
         services.AddHostedService<ProcessamentoIAWorker>();
 
         services.AddSingleton<INotaClinicaFormatter, NotaClinicaFormatter>();
+        services.AddSingleton<IGeradorPdfNota, GeradorPdfNota>();
+
+        services.AddScoped<IConfiguracaoExportacaoService, ConfiguracaoExportacaoService>();
+        services.AddHttpClient(WebhookExportador.NomeCliente, cliente =>
+        {
+            // O medico espera a confirmacao na tela: um EMR lento nao pode
+            // prender a requisicao por muito tempo.
+            cliente.Timeout = TimeSpan.FromSeconds(15);
+        });
+        services.AddScoped<IExportadorNota, WebhookExportador>();
+
         services.AddScoped<ProntuarioNativoOutput>();
         services.AddScoped<ExportacaoEmrOutput>();
         services.AddScoped<IRegistroClinicoOutput, RegistroClinicoOutputResolver>();
+
+        services.Configure<IntegracaoOptions>(configuration.GetSection(IntegracaoOptions.SectionName));
+        services.AddScoped<IIntegracaoService, IntegracaoService>();
 
         services.AddScoped<IAtendimentoService, AtendimentoService>();
         services.AddScoped<IPacienteService, PacienteService>();

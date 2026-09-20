@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Clinisys EMR — Demonstração</title>
+  <style>
+    :root {
+      --fundo: #eef1f5;
+      --painel: #ffffff;
+      --borda: #d6dce5;
+      --texto: #1f2733;
+      --suave: #5d6b80;
+      --marca: #14532d;
+      --ok: #1a7f4b;
+      --alerta: #b42318;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--fundo);
+      color: var(--texto);
+    }
+    header {
+      background: var(--marca);
+      color: #fff;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header strong { font-size: 16px; letter-spacing: .3px; }
+    header small { opacity: .8; display: block; font-weight: 400; }
+    .estado { font-size: 12px; display: flex; align-items: center; gap: 8px; }
+    .pulso { width: 8px; height: 8px; border-radius: 50%; background: #7ee2a8; animation: pisca 1.6s infinite; }
+    @keyframes pisca { 50% { opacity: .25; } }
+    main { max-width: 900px; margin: 0 auto; padding: 24px 16px 64px; }
+    .vazio {
+      background: var(--painel);
+      border: 1px dashed var(--borda);
+      border-radius: 10px;
+      padding: 48px 24px;
+      text-align: center;
+      color: var(--suave);
+    }
+    .nota {
+      background: var(--painel);
+      border: 1px solid var(--borda);
+      border-radius: 10px;
+      margin-bottom: 16px;
+      overflow: hidden;
+      animation: entra .4s ease;
+    }
+    @keyframes entra { from { opacity: 0; transform: translateY(-6px); } }
+    .nota__topo {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--borda);
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .nota__paciente { font-weight: 600; }
+    .nota__meta { font-size: 12px; color: var(--suave); margin-top: 2px; }
+    .selo {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      align-self: flex-start;
+      font-weight: 600;
+    }
+    .selo--ok { background: #e3f5eb; color: var(--ok); }
+    .selo--erro { background: #fdeceb; color: var(--alerta); }
+    .selo--teste { background: #eef1f5; color: var(--suave); }
+    .nota__corpo {
+      margin: 0;
+      padding: 18px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12.5px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <strong>Clinisys EMR</strong>
+      <small>Prontuário eletrônico do cliente — ambiente de demonstração</small>
+    </div>
+    <div class="estado"><span class="pulso"></span> aguardando notas do Prontuário IA</div>
+  </header>
+
+  <main id="lista">
+    <div class="vazio">
+      Nenhuma nota recebida ainda.<br />
+      Finalize um atendimento no Prontuário IA para vê-la chegar aqui.
+    </div>
+  </main>
+
+  <script>
+    const lista = document.getElementById('lista');
+    const formatador = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+
+    function selo(nota) {
+      if (nota.evento === 'teste') return '<span class="selo selo--teste">evento de teste</span>';
+      return nota.assinaturaValida
+        ? '<span class="selo selo--ok">assinatura conferida</span>'
+        : '<span class="selo selo--erro">sem assinatura</span>';
+    }
+
+    function escapar(texto) {
+      const div = document.createElement('div');
+      div.textContent = texto ?? '';
+      return div.innerHTML;
+    }
+
+    async function atualizar() {
+      try {
+        const resposta = await fetch('/api/notas');
+        const notas = await resposta.json();
+
+        if (!notas.length) return;
+
+        lista.innerHTML = notas.map((nota) => `
+          <article class="nota">
+            <div class="nota__topo">
+              <div>
+                <div class="nota__paciente">${escapar(nota.pacienteNome)}</div>
+                <div class="nota__meta">
+                  ${nota.pacienteIdExterno ? 'ID ' + escapar(nota.pacienteIdExterno) + ' · ' : ''}
+                  ${escapar(nota.medicoNome)} · recebida em ${formatador.format(new Date(nota.recebidoEm))}
+                </div>
+              </div>
+              ${selo(nota)}
+            </div>
+            <pre class="nota__corpo">${escapar(nota.conteudo)}</pre>
+          </article>
+        `).join('');
+      } catch {
+        // Silencioso de proposito: a tela fica na demonstracao por horas e nao
+        // pode encher de erro se o backend reiniciar.
+      }
+    }
+
+    atualizar();
+    setInterval(atualizar, 2000);
+  </script>
+</body>
+</html>

@@ -13,17 +13,23 @@ public class AtendimentoService : IAtendimentoService
     private readonly IRegistroClinicoOutput _output;
     private readonly IArmazenamentoAudio _armazenamento;
     private readonly IFilaProcessamentoIA _fila;
+    private readonly IExportadorNota _exportador;
+    private readonly INotaClinicaFormatter _formatador;
 
     public AtendimentoService(
         ApplicationDbContext db,
         IRegistroClinicoOutput output,
         IArmazenamentoAudio armazenamento,
-        IFilaProcessamentoIA fila)
+        IFilaProcessamentoIA fila,
+        IExportadorNota exportador,
+        INotaClinicaFormatter formatador)
     {
         _db = db;
         _output = output;
         _armazenamento = armazenamento;
         _fila = fila;
+        _exportador = exportador;
+        _formatador = formatador;
     }
 
     public async Task<Guid?> AbrirAsync(Guid pacienteRefId, Guid medicoId, Guid clinicaId, CancellationToken cancellationToken = default)
@@ -185,6 +191,79 @@ public class AtendimentoService : IAtendimentoService
         atendimento.Status = StatusAtendimento.Cancelado;
         await _db.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+
+    public async Task<NotaExportavelDto?> ObterNotaAsync(
+        Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default)
+    {
+        var atendimento = await DaClinica(clinicaId)
+            .Include(a => a.NotaExportavel)
+            .Include(a => a.Medico!.Clinica)
+            .SingleOrDefaultAsync(a => a.Id == atendimentoId, cancellationToken);
+
+        if (atendimento is null)
+        {
+            return null;
+        }
+
+        var webhookConfigurado = !string.IsNullOrEmpty(atendimento.Medico!.Clinica!.WebhookUrl);
+
+        // Antes da confirmacao ainda nao existe nota gravada: mostrar o conteudo
+        // em revisao evita uma tela vazia e deixa claro o que sera exportado.
+        if (atendimento.NotaExportavel is not { } nota)
+        {
+            var conteudo = _formatador.Formatar(await ObterRascunhoAsync(atendimento, cancellationToken));
+            return new NotaExportavelDto(
+                conteudo, StatusNota.Rascunho.ToString(), null, null, null, 0, null, webhookConfigurado);
+        }
+
+        return new NotaExportavelDto(
+            nota.ConteudoFormatado,
+            nota.Status.ToString(),
+            nota.RevisadaEm,
+            nota.ExportadoEm,
+            nota.Destino,
+            nota.TentativasExportacao,
+            nota.UltimoErroExportacao,
+            webhookConfigurado);
+    }
+
+    public async Task<ResultadoExportacaoDto?> ExportarAsync(
+        Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default)
+    {
+        var existe = await DaClinica(clinicaId).AnyAsync(a => a.Id == atendimentoId, cancellationToken);
+        return existe ? await _exportador.EnviarAsync(atendimentoId, cancellationToken) : null;
+    }
+
+    public async Task<DadosPdfNota?> ObterDadosPdfAsync(
+        Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default)
+    {
+        var atendimento = await DaClinica(clinicaId)
+            .Include(a => a.PacienteRef)
+            .Include(a => a.Medico!.Clinica)
+            .Include(a => a.Prontuario)
+            .Include(a => a.NotaExportavel)
+            .SingleOrDefaultAsync(a => a.Id == atendimentoId, cancellationToken);
+
+        if (atendimento is null)
+        {
+            return null;
+        }
+
+        var conteudo = atendimento.NotaExportavel?.ConteudoFormatado
+            ?? _formatador.Formatar(await ObterRascunhoAsync(atendimento, cancellationToken));
+
+        var documento = atendimento.PacienteRef!.Cpf
+            ?? (atendimento.PacienteRef.IdExternoEmr is { } externo ? $"EMR {externo}" : null);
+
+        return new DadosPdfNota(
+            atendimento.Medico!.Clinica!.Nome,
+            atendimento.PacienteRef.Nome,
+            documento,
+            atendimento.Medico.Nome,
+            atendimento.DataHora,
+            conteudo);
     }
 
     // A clinica do atendimento e a do medico responsavel - mesmo criterio usado

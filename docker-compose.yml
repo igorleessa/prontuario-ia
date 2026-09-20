@@ -60,6 +60,8 @@ services:
       # As chaves de API das clinicas sao cifradas com o Data Protection; o
       # chaveiro fica em volume para sobreviver a recriacao do container.
       DataProtection__Caminho: /chaves
+      # Base usada para montar o link que o EMR do cliente abre para o medico.
+      Integracao__UrlBaseFrontend: http://localhost:${FRONTEND_PORT:-4200}
     volumes:
       - dataprotection-keys:/chaves
     ports:
@@ -77,6 +79,18 @@ services:
       - "${FRONTEND_PORT:-4200}:80"
     depends_on:
       - backend
+
+  # EMR ficticio para demonstrar a Modalidade B ponta a ponta: recebe a nota
+  # pelo webhook e a exibe como se fosse o prontuario do cliente.
+  emr-demo:
+    build:
+      context: ./backend
+      dockerfile: src/Prontuario.EmrDemo/Dockerfile
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      Webhook__Secret: ${EMR_DEMO_SECRET:-segredo-de-demonstracao}
+    ports:
+      - "${EMR_DEMO_PORT:-9080}:8080"
 
 volumes:
   postgres-data:

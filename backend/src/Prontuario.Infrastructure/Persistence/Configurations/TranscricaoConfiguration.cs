@@ -33,7 +33,8 @@ public class NotaExportavelConfiguration : IEntityTypeConfiguration<NotaExportav
     public void Configure(EntityTypeBuilder<NotaExportavel> builder)
     {
         builder.Property(n => n.Status).HasConversion<string>().HasMaxLength(20);
-        builder.Property(n => n.Destino).HasMaxLength(200);
+        builder.Property(n => n.Destino).HasMaxLength(500);
+        builder.Property(n => n.UltimoErroExportacao).HasMaxLength(500);
     }
 }
 

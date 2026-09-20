@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { AtendimentoDetalhe, AtendimentoResumo } from '../models/atendimento.model';
+import { NotaExportavel, ResultadoExportacao } from '../models/exportacao.model';
 import { RascunhoClinico } from '../models/rascunho-clinico.model';
 
 @Injectable({ providedIn: 'root' })
@@ -51,6 +52,21 @@ export class AtendimentoService {
    */
   preverNota(revisado: RascunhoClinico): Observable<{ conteudo: string }> {
     return this.http.post<{ conteudo: string }>(`${this.baseUrl}/nota-previa`, revisado);
+  }
+
+  /** Nota clínica gravada e estado da exportação (RF20) — o que de fato foi enviado ao EMR. */
+  obterNota(atendimentoId: string): Observable<NotaExportavel> {
+    return this.http.get<NotaExportavel>(`${this.baseUrl}/${atendimentoId}/nota`);
+  }
+
+  /** Reenvia a nota ao webhook da clínica quando o envio automático falhou (RF19). */
+  exportar(atendimentoId: string): Observable<ResultadoExportacao> {
+    return this.http.post<ResultadoExportacao>(`${this.baseUrl}/${atendimentoId}/exportar`, {});
+  }
+
+  /** PDF da nota clínica (RF18), para anexar ou imprimir no EMR do cliente. */
+  baixarNotaPdf(atendimentoId: string): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/${atendimentoId}/nota.pdf`, { responseType: 'blob' });
   }
 
   cancelar(atendimentoId: string): Observable<void> {

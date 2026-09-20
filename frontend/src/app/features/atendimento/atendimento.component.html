@@ -298,17 +298,62 @@
             } @else {
             <div class="nota">
               @if (carregandoNota()) {
-                <p class="nota__estado">Gerando a nota clínica…</p>
+                <p class="nota__estado">Carregando a nota clínica…</p>
               } @else if (nota()) {
+                @if (notaGravada(); as gravada) {
+                  <div class="entrega" [class.entrega--ok]="gravada.status === 'Exportada'">
+                    <span class="entrega__ponto" aria-hidden="true"></span>
+                    <div>
+                      @if (gravada.status === 'Exportada') {
+                        <strong>Nota entregue ao EMR</strong>
+                        <small>
+                          {{ gravada.exportadoEm | date: "dd/MM/y 'às' HH:mm" }}
+                          @if (gravada.destino) { · {{ gravada.destino }} }
+                        </small>
+                      } @else if (gravada.webhookConfigurado) {
+                        <strong>Nota revisada, ainda não entregue</strong>
+                        <small>
+                          {{ gravada.ultimoErroExportacao ?? 'O envio automático não foi concluído.' }}
+                          Reenvie ou exporte manualmente.
+                        </small>
+                      } @else {
+                        <strong>Exportação manual</strong>
+                        <small>
+                          Nenhum webhook configurado para esta clínica — copie o texto ou baixe o PDF.
+                        </small>
+                      }
+                    </div>
+                  </div>
+                }
+
                 <pre class="nota__texto">{{ nota() }}</pre>
+
                 <div class="acoes">
                   <button type="button" class="botao botao--secundario" (click)="copiarNota()">
                     {{ notaCopiada() ? 'Copiado' : 'Copiar nota' }}
                   </button>
-                  <span class="acoes__nota">
-                    Mesmo formato enviado ao EMR na modalidade Conector.
-                  </span>
+                  <button type="button" class="botao botao--secundario" [disabled]="baixandoPdf()"
+                          (click)="baixarPdf()">
+                    {{ baixandoPdf() ? 'Gerando…' : 'Baixar PDF' }}
+                  </button>
+                  @if (notaGravada()?.webhookConfigurado) {
+                    <button type="button" class="botao" [disabled]="exportando()"
+                            (click)="reenviarAoEmr()">
+                      {{ exportando() ? 'Enviando…' : notaGravada()?.status === 'Exportada' ? 'Reenviar ao EMR' : 'Enviar ao EMR' }}
+                    </button>
+                  }
                 </div>
+
+                @if (resultadoExportacao(); as resultado) {
+                  <p class="aviso" [class.aviso--sucesso]="resultado.sucesso"
+                     [class.aviso--erro]="!resultado.sucesso" role="status">
+                    @if (resultado.sucesso) {
+                      O EMR de destino confirmou o recebimento ({{ resultado.codigoHttp }}).
+                    } @else {
+                      {{ resultado.erro }}
+                    }
+                  </p>
+                }
               }
             </div>
             }

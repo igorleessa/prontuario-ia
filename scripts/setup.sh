@@ -136,6 +136,9 @@ if [[ "$PULAR_PERGUNTAS" == false ]]; then
   # O MinIO se recusa a iniciar com senha de menos de 8 caracteres.
   MINIO_PASSWORD=$(perguntar_senha "Senha do MinIO (mínimo 8 caracteres)" 8)
 
+  # Segredo do webhook usado pelo EMR de demonstracao para conferir a assinatura.
+  EMR_DEMO_SECRET=$(gerar_chave | tr -cd 'A-Za-z0-9' | head -c 32)
+
   info "Gerando chave JWT aleatória…"
   JWT_KEY=$(gerar_chave)
 
@@ -168,6 +171,12 @@ MINIO_CONSOLE_PORT=9001
 
 BACKEND_PORT=$BACKEND_PORT
 FRONTEND_PORT=$FRONTEND_PORT
+
+# EMR ficticio da demonstracao: recebe a nota pelo webhook e a exibe como se
+# fosse o prontuario do cliente. O segredo e o mesmo que se cadastra na tela
+# de Configuracoes > Exportacao para o EMR.
+EMR_DEMO_PORT=9080
+EMR_DEMO_SECRET=$EMR_DEMO_SECRET
 EOF
   chmod 600 "$ENV_FILE"
   ok ".env criado em $ENV_FILE (permissão 600)."
@@ -180,6 +189,8 @@ ler_env() { grep -E "^$1=" "$ENV_FILE" | head -n1 | cut -d= -f2-; }
 BACKEND_PORT=$(ler_env BACKEND_PORT)
 FRONTEND_PORT=$(ler_env FRONTEND_PORT)
 MINIO_CONSOLE_PORT=$(ler_env MINIO_CONSOLE_PORT)
+EMR_DEMO_PORT=$(ler_env EMR_DEMO_PORT)
+EMR_DEMO_SECRET=$(ler_env EMR_DEMO_SECRET)
 SEED_EMAIL=$(ler_env SEED_EMAIL)
 SEED_MODO_OPERACAO=$(ler_env SEED_MODO_OPERACAO)
 
@@ -210,6 +221,11 @@ if [[ "${API_OK:-false}" == true ]]; then
   echo "  Frontend:       http://localhost:${FRONTEND_PORT}"
   echo "  API (Swagger):  http://localhost:${BACKEND_PORT}/swagger"
   echo "  MinIO console:  http://localhost:${MINIO_CONSOLE_PORT}"
+  echo "  EMR de demo:    http://localhost:${EMR_DEMO_PORT}"
+  echo
+  echo "  Para demonstrar a modalidade Conector, cadastre em Configuracoes:"
+  echo "    Webhook:      http://emr-demo:8080/webhook"
+  echo "    Segredo:      ${EMR_DEMO_SECRET}"
   echo
   echo "  Login:          ${SEED_EMAIL}"
   echo "  Modalidade:     ${SEED_MODO_OPERACAO}"

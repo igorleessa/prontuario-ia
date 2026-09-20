@@ -7,6 +7,7 @@ import {
   CLASSE_STATUS,
   ROTULO_STATUS,
 } from '../../core/models/atendimento.model';
+import { NotaExportavel, ResultadoExportacao } from '../../core/models/exportacao.model';
 import { RascunhoClinico } from '../../core/models/rascunho-clinico.model';
 import { AtendimentoService } from '../../core/services/atendimento.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -52,6 +53,10 @@ export class AtendimentoComponent {
   readonly transcricao = signal<string | null>(null);
   readonly erroIA = signal<string | null>(null);
   readonly mostrarTranscricao = signal(false);
+  readonly notaGravada = signal<NotaExportavel | null>(null);
+  readonly exportando = signal(false);
+  readonly resultadoExportacao = signal<ResultadoExportacao | null>(null);
+  readonly baixandoPdf = signal(false);
 
   readonly gravando = this.gravacaoAudio.gravando;
   readonly rotuloStatus = ROTULO_STATUS;
@@ -307,6 +312,58 @@ export class AtendimentoComponent {
     }
   }
 
+  /** Reenvia a nota ao EMR quando o envio automático falhou (RF19). */
+  reenviarAoEmr(): void {
+    if (this.exportando()) {
+      return;
+    }
+
+    this.exportando.set(true);
+    this.erro.set(null);
+    this.resultadoExportacao.set(null);
+
+    this.atendimentos.exportar(this.id()).subscribe({
+      next: (resultado) => {
+        this.exportando.set(false);
+        this.resultadoExportacao.set(resultado);
+
+        // O status e as tentativas mudam no servidor a cada envio.
+        this.atendimentos.obterNota(this.id()).subscribe({
+          next: (nota) => this.notaGravada.set(nota),
+        });
+      },
+      error: () => {
+        this.exportando.set(false);
+        this.erro.set('Não foi possível reenviar a nota.');
+      },
+    });
+  }
+
+  baixarPdf(): void {
+    if (this.baixandoPdf()) {
+      return;
+    }
+
+    this.baixandoPdf.set(true);
+    this.erro.set(null);
+
+    this.atendimentos.baixarNotaPdf(this.id()).subscribe({
+      next: (arquivo) => {
+        this.baixandoPdf.set(false);
+        const url = URL.createObjectURL(arquivo);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `nota-${this.atendimento()?.pacienteNome ?? 'paciente'}.pdf`;
+        link.click();
+        URL.revokeObjectURL(url);
+      },
+      error: () => {
+        this.baixandoPdf.set(false);
+        this.erro.set('Não foi possível gerar o PDF.');
+      },
+    });
+  }
+
   voltarParaLista(): void {
     this.router.navigate(['/atendimentos']);
   }
@@ -315,6 +372,24 @@ export class AtendimentoComponent {
     this.carregandoNota.set(true);
     this.notaCopiada.set(false);
     this.erro.set(null);
+
+    // Depois de encerrado, a nota gravada e a fonte da verdade: e o texto que
+    // foi (ou sera) enviado ao EMR. Durante a revisao a previa acompanha o que
+    // o medico esta digitando.
+    if (this.etapa() === 'encerrado') {
+      this.atendimentos.obterNota(this.id()).subscribe({
+        next: (nota) => {
+          this.notaGravada.set(nota);
+          this.nota.set(nota.conteudo);
+          this.carregandoNota.set(false);
+        },
+        error: () => {
+          this.carregandoNota.set(false);
+          this.erro.set('Não foi possível carregar a nota clínica.');
+        },
+      });
+      return;
+    }
 
     this.atendimentos.preverNota(this.conteudoRevisado()).subscribe({
       next: ({ conteudo }) => {

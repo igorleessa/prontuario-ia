@@ -38,4 +38,16 @@ public interface IAtendimentoService
     Task<bool> ConfirmarAsync(Guid atendimentoId, RascunhoClinicoDto revisado, Guid clinicaId, CancellationToken cancellationToken = default);
 
     Task<bool> CancelarAsync(Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default);
+
+    /// <summary>Estado da nota clinica exportavel do atendimento (RF20). Null quando o atendimento nao existe na clinica.</summary>
+    Task<NotaExportavelDto?> ObterNotaAsync(Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default);
+
+    /// <summary>Reenvia ao EMR de destino uma nota ja revisada (RF19), para o caso de o envio automatico ter falhado.</summary>
+    Task<ResultadoExportacaoDto?> ExportarAsync(Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Dados do PDF da nota (RF18). Disponivel nas duas modalidades: mesmo no modo
+    /// integrado o medico pode precisar do documento em papel ou anexo.
+    /// </summary>
+    Task<DadosPdfNota?> ObterDadosPdfAsync(Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default);
 }

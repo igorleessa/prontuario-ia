@@ -8,9 +8,9 @@
   </a>
 
   <div>
-    <h1>Transcrição automática</h1>
+    <h1>Configurações da clínica</h1>
     <p class="pagina__subtitulo">
-      Credenciais da OpenAI usadas para transcrever a consulta e gerar o rascunho do prontuário.
+      Credenciais de IA e destino da nota clínica. Ajustes de clínica, não de usuário.
     </p>
   </div>
 
@@ -23,6 +23,11 @@
 
   <div class="cartao">
     <div class="cartao__corpo">
+      <h2>Transcrição automática</h2>
+      <p class="secao__texto">
+        Credenciais da OpenAI usadas para transcrever a consulta e gerar o rascunho do prontuário.
+      </p>
+
       @if (carregando()) {
         <div class="vazio">Carregando configuração…</div>
       } @else {
@@ -94,4 +99,6 @@
       }
     </div>
   </div>
+
+  <app-configuracao-exportacao />
 </div>
