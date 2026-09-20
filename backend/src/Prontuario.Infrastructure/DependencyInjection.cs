@@ -36,6 +36,7 @@ public static class DependencyInjection
             protecao.PersistKeysToFileSystem(new DirectoryInfo(caminhoChaves));
         }
 
+        services.AddScoped<IAuditoriaService, AuditoriaService>();
         services.AddScoped<IConfiguracaoIAService, ConfiguracaoIAService>();
 
         services.AddHttpClient(OpenAiCliente.Nome, cliente =>
@@ -50,6 +51,7 @@ public static class DependencyInjection
 
         services.AddSingleton<IFilaProcessamentoIA, FilaProcessamentoIA>();
         services.AddHostedService<ProcessamentoIAWorker>();
+        services.AddHostedService<RetencaoAudioWorker>();
 
         services.AddSingleton<INotaClinicaFormatter, NotaClinicaFormatter>();
         services.AddSingleton<IGeradorPdfNota, GeradorPdfNota>();

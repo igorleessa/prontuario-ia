@@ -125,6 +125,7 @@ if (-not $PularPerguntas) {
     Write-Host ''
     Write-Info '=== Usuario inicial da aplicacao (para login) ==='
     $SeedEmail = Read-ComPadrao 'E-mail do medico' 'medico@local.test'
+    $SeedEmailAdmin = Read-ComPadrao 'E-mail do administrador (configura a clinica)' 'admin@local.test'
     $SeedSenha = Read-Senha 'Senha do medico'
     $SeedNomeMedico = Read-ComPadrao 'Nome do medico' 'Medico de Teste'
     $SeedNomeClinica = Read-ComPadrao 'Nome da clinica' 'Clinica de Teste'
@@ -168,6 +169,10 @@ JWT_EXPIRACAO_MINUTOS=60
 
 SEED_HABILITADO=true
 SEED_EMAIL=$SeedEmail
+# As telas de configuracao exigem o papel de administrador; o login de medico
+# nao mexe em credenciais nem no destino de exportacao da clinica.
+SEED_EMAIL_ADMIN=$SeedEmailAdmin
+SEED_NOME_ADMIN=Administrador da Clinica
 SEED_SENHA=$SeedSenha
 SEED_NOME_MEDICO=$SeedNomeMedico
 SEED_NOME_CLINICA=$SeedNomeClinica
@@ -177,6 +182,9 @@ MINIO_USER=$MinioUser
 MINIO_PASSWORD=$MinioPassword
 MINIO_PORT=9000
 MINIO_CONSOLE_PORT=9001
+
+# Dias que o audio bruto fica guardado depois de transcrito (LGPD).
+AUDIO_RETENCAO_DIAS=30
 
 BACKEND_PORT=$BackendPort
 FRONTEND_PORT=$FrontendPort
@@ -241,7 +249,8 @@ try {
         Write-Host "    Webhook:      http://emr-demo:8080/webhook"
         Write-Host "    Segredo:      $($config['EMR_DEMO_SECRET'])"
         Write-Host ''
-        Write-Host "  Login:          $($config['SEED_EMAIL'])"
+        Write-Host "  Login medico:   $($config['SEED_EMAIL'])"
+        Write-Host "  Login admin:    $($config['SEED_EMAIL_ADMIN']) (mesma senha; configura a clinica)"
         Write-Host "  Modalidade:     $($config['SEED_MODO_OPERACAO'])"
         Write-Host ''
         Write-Host '  Logs:           docker compose logs -f'

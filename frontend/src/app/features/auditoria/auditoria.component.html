@@ -1,0 +1,78 @@
+<div class="pagina">
+  <a class="voltar" routerLink="/atendimentos">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
+      <path d="m15 18-6-6 6-6" />
+    </svg>
+    Atendimentos
+  </a>
+
+  <div>
+    <h1>Trilha de auditoria</h1>
+    <p class="pagina__subtitulo">
+      Todo acesso a dado clínico fica registrado (LGPD). As entradas não podem ser editadas nem
+      apagadas por nenhum usuário — nem por esta tela.
+    </p>
+  </div>
+
+  @if (erro()) {
+    <p class="aviso aviso--erro" role="alert">{{ erro() }}</p>
+  }
+
+  <div class="filtros" role="group" aria-label="Filtrar por ação">
+    <button type="button" class="filtro" [class.filtro--ativo]="filtro() === null"
+            (click)="filtrar(null)">
+      Todas
+    </button>
+    @for (acao of acoes; track acao) {
+      <button type="button" class="filtro" [class.filtro--ativo]="filtro() === acao"
+              (click)="filtrar(acao)">
+        {{ descrever(acao) }}
+      </button>
+    }
+  </div>
+
+  <div class="cartao">
+    <div class="cartao__corpo">
+      @if (carregando()) {
+        <div class="vazio">Carregando…</div>
+      } @else if (registros().length === 0) {
+        <div class="vazio">
+          <span class="vazio__titulo">Nenhum registro</span>
+          <p>Nada foi acessado ainda com este filtro.</p>
+        </div>
+      } @else {
+        <table class="trilha">
+          <thead>
+            <tr>
+              <th scope="col">Quando</th>
+              <th scope="col">Quem</th>
+              <th scope="col">Ação</th>
+              <th scope="col">Sobre</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (registro of registros(); track registro.id) {
+              <tr>
+                <td class="trilha__quando">{{ registro.ocorrido | date: 'dd/MM/y HH:mm:ss' }}</td>
+                <td>{{ registro.usuarioNome }}</td>
+                <td>{{ descrever(registro.acao) }}</td>
+                <td class="trilha__alvo">
+                  @if (registro.atendimentoId) {
+                    <a [routerLink]="['/atendimentos', registro.atendimentoId]">
+                      {{ registro.pacienteNome ?? 'atendimento' }}
+                    </a>
+                  }
+                  @if (registro.detalhe) {
+                    <span class="trilha__detalhe">{{ registro.detalhe }}</span>
+                  }
+                  @if (!registro.atendimentoId && !registro.detalhe) { — }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </div>
+  </div>
+</div>

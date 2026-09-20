@@ -77,10 +77,26 @@ public class DatabaseInitializer
         _db.Clinicas.Add(clinica);
         _db.Usuarios.Add(medico);
         _db.Pacientes.Add(paciente);
+
+        if (!string.IsNullOrWhiteSpace(_seed.EmailAdministrador))
+        {
+            var administrador = new Usuario
+            {
+                ClinicaId = clinica.Id,
+                Nome = _seed.NomeAdministrador,
+                Email = _seed.EmailAdministrador,
+                Papel = PapelUsuario.Administrador,
+            };
+            administrador.SenhaHash = _passwordHasher.HashPassword(administrador, _seed.Senha);
+            _db.Usuarios.Add(administrador);
+        }
+
         await _db.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
-            "Seed concluido. Clinica {Clinica} ({Modo}), medico {Email}, paciente exemplo {PacienteId}.",
-            clinica.Nome, modoOperacao, medico.Email, paciente.Id);
+            "Seed concluido. Clinica {Clinica} ({Modo}), medico {Email}, administrador {Admin}, paciente exemplo {PacienteId}.",
+            clinica.Nome, modoOperacao, medico.Email,
+            string.IsNullOrWhiteSpace(_seed.EmailAdministrador) ? "(nenhum)" : _seed.EmailAdministrador,
+            paciente.Id);
     }
 }

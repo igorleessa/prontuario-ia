@@ -74,6 +74,12 @@ public class ProcessamentoIAWorker : BackgroundService
             return;
         }
 
+        if (string.IsNullOrEmpty(atendimento.GravacaoAudio.StoragePath))
+        {
+            throw new InvalidOperationException(
+                "O audio desta consulta ja foi expurgado pela politica de retencao e nao pode ser reprocessado.");
+        }
+
         var configuracoes = provedor.GetRequiredService<IConfiguracaoIAService>();
         var credenciais = await configuracoes.ObterCredenciaisAsync(atendimento.Medico!.ClinicaId, cancellationToken);
 

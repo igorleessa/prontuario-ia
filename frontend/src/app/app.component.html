@@ -17,7 +17,10 @@
       </a>
 
       <div class="cabecalho__usuario">
-        <a class="botao botao--discreto" routerLink="/configuracoes">Configurações</a>
+        @if (administrador()) {
+          <a class="botao botao--discreto" routerLink="/auditoria">Auditoria</a>
+          <a class="botao botao--discreto" routerLink="/configuracoes">Configurações</a>
+        }
         @if (usuario(); as u) {
           <span class="avatar" aria-hidden="true">{{ iniciais() }}</span>
           <span class="cabecalho__nome">

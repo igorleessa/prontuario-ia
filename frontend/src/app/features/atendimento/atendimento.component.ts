@@ -57,6 +57,7 @@ export class AtendimentoComponent {
   readonly exportando = signal(false);
   readonly resultadoExportacao = signal<ResultadoExportacao | null>(null);
   readonly baixandoPdf = signal(false);
+  readonly reprocessando = signal(false);
 
   readonly gravando = this.gravacaoAudio.gravando;
   readonly rotuloStatus = ROTULO_STATUS;
@@ -267,6 +268,29 @@ export class AtendimentoComponent {
     });
   }
 
+  /** Tenta de novo a transcrição que falhou, sem abrir outro atendimento (RF13). */
+  reprocessar(): void {
+    if (this.reprocessando()) {
+      return;
+    }
+
+    this.reprocessando.set(true);
+    this.erro.set(null);
+
+    this.atendimentos.reprocessar(this.id()).subscribe({
+      next: () => {
+        this.reprocessando.set(false);
+        this.erroIA.set(null);
+        this.atualizarStatus('ProcessandoIA');
+        this.acompanharProcessamento();
+      },
+      error: (erro: { error?: { erro?: string } }) => {
+        this.reprocessando.set(false);
+        this.erro.set(erro.error?.erro ?? 'Não foi possível reprocessar o áudio.');
+      },
+    });
+  }
+
   confirmar(): void {
     if (this.salvando()) {
       return;
@@ -283,8 +307,17 @@ export class AtendimentoComponent {
           this.atualizarStatus('Finalizado');
           this.form.disable();
         },
-        error: () => {
+        error: (erro: { status?: number; error?: { erro?: string } }) => {
           this.salvando.set(false);
+
+          // 409 e o registro ja assinado se protegendo: recarregar mostra o
+          // estado real em vez de deixar o medico tentando salvar de novo.
+          if (erro.status === 409) {
+            this.erro.set(erro.error?.erro ?? 'Este atendimento já foi encerrado.');
+            this.carregar(this.id(), true);
+            return;
+          }
+
           this.erro.set('Não foi possível finalizar o atendimento.');
         },
       });

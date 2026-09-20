@@ -34,8 +34,18 @@ public interface IAtendimentoService
     /// <summary>
     /// Confirma a revisao do medico (RF10) e delega a persistencia para
     /// IRegistroClinicoOutput, que escolhe Modalidade A ou B conforme a clinica.
+    /// Devolve Conflito quando o atendimento ja foi finalizado ou cancelado:
+    /// um registro assinado nao se sobrescreve (RF15).
     /// </summary>
-    Task<bool> ConfirmarAsync(Guid atendimentoId, RascunhoClinicoDto revisado, Guid clinicaId, CancellationToken cancellationToken = default);
+    Task<ResultadoAtendimento> ConfirmarAsync(
+        Guid atendimentoId, RascunhoClinicoDto revisado, Guid clinicaId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reenfileira a transcricao e a extracao do audio ja gravado (RF13), sem
+    /// duplicar o atendimento. Conflito quando nao ha audio ou o registro ja foi encerrado.
+    /// </summary>
+    Task<ResultadoAtendimento> ReprocessarAsync(
+        Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default);
 
     Task<bool> CancelarAsync(Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default);
 

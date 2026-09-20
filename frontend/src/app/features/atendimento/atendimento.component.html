@@ -145,9 +145,16 @@
             </p>
 
             @if (erroIA()) {
-              <p class="aviso aviso--erro" role="alert">
-                A transcrição automática falhou: {{ erroIA() }} Preencha o prontuário manualmente.
-              </p>
+              <div class="aviso aviso--erro" role="alert">
+                <p>A transcrição automática falhou: {{ erroIA() }}</p>
+                <div class="acoes">
+                  <button type="button" class="botao botao--secundario" [disabled]="reprocessando()"
+                          (click)="reprocessar()">
+                    {{ reprocessando() ? 'Reenviando…' : 'Tentar de novo' }}
+                  </button>
+                  <span class="acoes__nota">Ou preencha o prontuário manualmente abaixo.</span>
+                </div>
+              </div>
             } @else if (transcricao()) {
               <p class="aviso aviso--info">
                 Rascunho gerado por IA a partir do áudio. Revise cada campo — nada é salvo sem sua confirmação.

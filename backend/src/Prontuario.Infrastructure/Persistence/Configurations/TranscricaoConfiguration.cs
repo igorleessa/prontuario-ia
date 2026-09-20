@@ -43,6 +43,10 @@ public class LogAuditoriaConfiguration : IEntityTypeConfiguration<LogAuditoria>
     public void Configure(EntityTypeBuilder<LogAuditoria> builder)
     {
         builder.Property(l => l.Acao).IsRequired().HasMaxLength(100);
+        builder.Property(l => l.Detalhe).HasMaxLength(500);
+
+        // A tela de auditoria lista sempre do mais recente para o mais antigo.
+        builder.HasIndex(l => l.CriadoEm);
 
         builder.HasOne(l => l.Usuario)
             .WithMany()

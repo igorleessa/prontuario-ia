@@ -54,6 +54,11 @@ export class AtendimentoService {
     return this.http.post<{ conteudo: string }>(`${this.baseUrl}/nota-previa`, revisado);
   }
 
+  /** Refaz a transcrição e a extração do áudio já gravado, sem duplicar o atendimento (RF13). */
+  reprocessar(atendimentoId: string): Observable<void> {
+    return this.http.post<void>(`${this.baseUrl}/${atendimentoId}/reprocessar`, {});
+  }
+
   /** Nota clínica gravada e estado da exportação (RF20) — o que de fato foi enviado ao EMR. */
   obterNota(atendimentoId: string): Observable<NotaExportavel> {
     return this.http.get<NotaExportavel>(`${this.baseUrl}/${atendimentoId}/nota`);

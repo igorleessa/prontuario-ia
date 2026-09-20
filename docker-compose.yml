@@ -52,11 +52,16 @@ services:
       Seed__NomeMedico: ${SEED_NOME_MEDICO:-Medico de Teste}
       Seed__NomeClinica: ${SEED_NOME_CLINICA:-Clinica de Teste}
       Seed__ModoOperacao: ${SEED_MODO_OPERACAO:-Integrado}
+      Seed__EmailAdministrador: ${SEED_EMAIL_ADMIN}
+      Seed__NomeAdministrador: ${SEED_NOME_ADMIN:-Administrador da Clinica}
       Cors__OrigensPermitidas__0: "http://localhost:${FRONTEND_PORT:-4200}"
       ArmazenamentoAudio__Endpoint: http://minio:9000
       ArmazenamentoAudio__AccessKey: ${MINIO_USER}
       ArmazenamentoAudio__SecretKey: ${MINIO_PASSWORD}
       ArmazenamentoAudio__Bucket: consultas
+      # Dias que o audio bruto fica guardado depois de transcrito (LGPD).
+      # Zero mantem as gravacoes ate expurgo manual.
+      ArmazenamentoAudio__RetencaoDias: ${AUDIO_RETENCAO_DIAS:-30}
       # As chaves de API das clinicas sao cifradas com o Data Protection; o
       # chaveiro fica em volume para sobreviver a recriacao do container.
       DataProtection__Caminho: /chaves

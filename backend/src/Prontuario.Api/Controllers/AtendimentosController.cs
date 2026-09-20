@@ -81,7 +81,28 @@ public class AtendimentosController : ApiControllerBase
 
     [HttpPost("{id:guid}/confirmar")]
     public async Task<IActionResult> Confirmar(Guid id, RascunhoClinicoDto revisado, CancellationToken cancellationToken)
-        => await _atendimentos.ConfirmarAsync(id, revisado, ClinicaId, cancellationToken) ? NoContent() : NotFound();
+        => await _atendimentos.ConfirmarAsync(id, revisado, ClinicaId, cancellationToken) switch
+        {
+            ResultadoAtendimento.Ok => NoContent(),
+            ResultadoAtendimento.Conflito => Conflict(new
+            {
+                erro = "Este atendimento ja foi encerrado. Um registro assinado nao pode ser sobrescrito.",
+            }),
+            _ => NotFound(),
+        };
+
+    /// <summary>Refaz a transcricao e a extracao do audio ja gravado (RF13), sem duplicar o atendimento.</summary>
+    [HttpPost("{id:guid}/reprocessar")]
+    public async Task<IActionResult> Reprocessar(Guid id, CancellationToken cancellationToken)
+        => await _atendimentos.ReprocessarAsync(id, ClinicaId, cancellationToken) switch
+        {
+            ResultadoAtendimento.Ok => Accepted(),
+            ResultadoAtendimento.Conflito => Conflict(new
+            {
+                erro = "Nao ha audio para reprocessar neste atendimento, ou ele ja foi encerrado.",
+            }),
+            _ => NotFound(),
+        };
 
     /// <summary>
     /// Pre-visualiza a nota clinica de texto corrido (Modalidade B) para o conteudo

@@ -115,6 +115,7 @@ if [[ "$PULAR_PERGUNTAS" == false ]]; then
   SEED_SENHA=$(perguntar_senha "Senha do médico")
   SEED_NOME_MEDICO=$(perguntar "Nome do médico" "Medico de Teste")
   SEED_NOME_CLINICA=$(perguntar "Nome da clínica" "Clinica de Teste")
+  SEED_EMAIL_ADMIN=$(perguntar "E-mail do administrador (configura a clínica)" "admin@local.test")
 
   echo
   info "=== Modalidade de operação da clínica ==="
@@ -162,12 +163,19 @@ SEED_EMAIL=$SEED_EMAIL
 SEED_SENHA=$SEED_SENHA
 SEED_NOME_MEDICO=$SEED_NOME_MEDICO
 SEED_NOME_CLINICA=$SEED_NOME_CLINICA
+# As telas de configuracao exigem o papel de administrador; o login de medico
+# nao mexe em credenciais nem no destino de exportacao da clinica.
+SEED_EMAIL_ADMIN=$SEED_EMAIL_ADMIN
+SEED_NOME_ADMIN=Administrador da Clinica
 SEED_MODO_OPERACAO=$SEED_MODO_OPERACAO
 
 MINIO_USER=$MINIO_USER
 MINIO_PASSWORD=$MINIO_PASSWORD
 MINIO_PORT=9000
 MINIO_CONSOLE_PORT=9001
+
+# Dias que o audio bruto fica guardado depois de transcrito (LGPD).
+AUDIO_RETENCAO_DIAS=30
 
 BACKEND_PORT=$BACKEND_PORT
 FRONTEND_PORT=$FRONTEND_PORT
@@ -193,6 +201,7 @@ EMR_DEMO_PORT=$(ler_env EMR_DEMO_PORT)
 EMR_DEMO_SECRET=$(ler_env EMR_DEMO_SECRET)
 SEED_EMAIL=$(ler_env SEED_EMAIL)
 SEED_MODO_OPERACAO=$(ler_env SEED_MODO_OPERACAO)
+SEED_EMAIL_ADMIN=$(ler_env SEED_EMAIL_ADMIN)
 
 # ----------------------------------------------------------------- subir ------
 cd "$RAIZ"
@@ -227,7 +236,8 @@ if [[ "${API_OK:-false}" == true ]]; then
   echo "    Webhook:      http://emr-demo:8080/webhook"
   echo "    Segredo:      ${EMR_DEMO_SECRET}"
   echo
-  echo "  Login:          ${SEED_EMAIL}"
+  echo "  Login médico:   ${SEED_EMAIL}"
+  echo "  Login admin:    ${SEED_EMAIL_ADMIN} (mesma senha; configura a clínica)"
   echo "  Modalidade:     ${SEED_MODO_OPERACAO}"
   echo
   echo "  Logs:           docker compose logs -f"

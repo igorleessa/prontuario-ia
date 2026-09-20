@@ -31,6 +31,7 @@ public class ConfiguracaoExportacaoController : ApiControllerBase
         => Ok(await _configuracoes.ObterAsync(ClinicaId, cancellationToken));
 
     [HttpPut]
+    [Authorize(Roles = PapeisAutorizacao.Administrador)]
     public async Task<ActionResult<ConfiguracaoExportacaoDto>> Salvar(
         SalvarConfiguracaoExportacaoDto dados, CancellationToken cancellationToken)
     {
@@ -46,14 +47,17 @@ public class ConfiguracaoExportacaoController : ApiControllerBase
 
     /// <summary>Envia um evento ficticio ao webhook para o cliente confirmar a integracao sem usar dado real.</summary>
     [HttpPost("testar")]
+    [Authorize(Roles = PapeisAutorizacao.Administrador)]
     public async Task<ActionResult<ResultadoExportacaoDto>> Testar(CancellationToken cancellationToken)
         => Ok(await _exportador.TestarAsync(ClinicaId, cancellationToken));
 
     [HttpPost("chave-integracao")]
+    [Authorize(Roles = PapeisAutorizacao.Administrador)]
     public async Task<ActionResult<ChaveIntegracaoGeradaDto>> GerarChave(CancellationToken cancellationToken)
         => Ok(await _configuracoes.GerarChaveIntegracaoAsync(ClinicaId, cancellationToken));
 
     [HttpDelete("chave-integracao")]
+    [Authorize(Roles = PapeisAutorizacao.Administrador)]
     public async Task<IActionResult> RevogarChave(CancellationToken cancellationToken)
         => await _configuracoes.RevogarChaveIntegracaoAsync(ClinicaId, cancellationToken) ? NoContent() : NotFound();
 }

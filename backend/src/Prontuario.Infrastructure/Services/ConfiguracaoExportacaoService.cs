@@ -21,13 +21,18 @@ public class ConfiguracaoExportacaoService : IConfiguracaoExportacaoService
 
     private readonly ApplicationDbContext _db;
     private readonly IDataProtector _protetor;
+    private readonly IAuditoriaService _auditoria;
     private readonly ILogger<ConfiguracaoExportacaoService> _logger;
 
     public ConfiguracaoExportacaoService(
-        ApplicationDbContext db, IDataProtectionProvider protecao, ILogger<ConfiguracaoExportacaoService> logger)
+        ApplicationDbContext db,
+        IDataProtectionProvider protecao,
+        IAuditoriaService auditoria,
+        ILogger<ConfiguracaoExportacaoService> logger)
     {
         _db = db;
         _protetor = protecao.CreateProtector(Proposito);
+        _auditoria = auditoria;
         _logger = logger;
     }
 
@@ -70,6 +75,10 @@ public class ConfiguracaoExportacaoService : IConfiguracaoExportacaoService
         }
 
         await _db.SaveChangesAsync(cancellationToken);
+        await _auditoria.RegistrarAsync(
+            AcoesAuditoria.ConfiguracaoAlterada, detalhe: $"destino de exportacao: {clinica.WebhookUrl ?? "desligado"}",
+            cancellationToken: cancellationToken);
+
         return await ObterAsync(clinicaId, cancellationToken);
     }
 
@@ -84,6 +93,10 @@ public class ConfiguracaoExportacaoService : IConfiguracaoExportacaoService
         clinica.ChaveIntegracaoCriadaEm = DateTime.UtcNow;
 
         await _db.SaveChangesAsync(cancellationToken);
+
+        await _auditoria.RegistrarAsync(
+            AcoesAuditoria.ConfiguracaoAlterada, detalhe: "chave de integracao gerada",
+            cancellationToken: cancellationToken);
 
         return new ChaveIntegracaoGeradaDto(chave, clinica.ChaveIntegracaoPrefixo, clinica.ChaveIntegracaoCriadaEm.Value);
     }
@@ -101,6 +114,10 @@ public class ConfiguracaoExportacaoService : IConfiguracaoExportacaoService
         clinica.ChaveIntegracaoCriadaEm = null;
 
         await _db.SaveChangesAsync(cancellationToken);
+        await _auditoria.RegistrarAsync(
+            AcoesAuditoria.ConfiguracaoAlterada, detalhe: "chave de integracao revogada",
+            cancellationToken: cancellationToken);
+
         return true;
     }
 

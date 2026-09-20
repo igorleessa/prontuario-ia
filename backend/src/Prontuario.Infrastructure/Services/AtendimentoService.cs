@@ -15,6 +15,7 @@ public class AtendimentoService : IAtendimentoService
     private readonly IFilaProcessamentoIA _fila;
     private readonly IExportadorNota _exportador;
     private readonly INotaClinicaFormatter _formatador;
+    private readonly IAuditoriaService _auditoria;
 
     public AtendimentoService(
         ApplicationDbContext db,
@@ -22,7 +23,8 @@ public class AtendimentoService : IAtendimentoService
         IArmazenamentoAudio armazenamento,
         IFilaProcessamentoIA fila,
         IExportadorNota exportador,
-        INotaClinicaFormatter formatador)
+        INotaClinicaFormatter formatador,
+        IAuditoriaService auditoria)
     {
         _db = db;
         _output = output;
@@ -30,6 +32,7 @@ public class AtendimentoService : IAtendimentoService
         _fila = fila;
         _exportador = exportador;
         _formatador = formatador;
+        _auditoria = auditoria;
     }
 
     public async Task<Guid?> AbrirAsync(Guid pacienteRefId, Guid medicoId, Guid clinicaId, CancellationToken cancellationToken = default)
@@ -52,6 +55,7 @@ public class AtendimentoService : IAtendimentoService
         _db.Atendimentos.Add(atendimento);
         await _db.SaveChangesAsync(cancellationToken);
 
+        await _auditoria.RegistrarAsync(AcoesAuditoria.AtendimentoAberto, atendimento.Id, cancellationToken: cancellationToken);
         return atendimento.Id;
     }
 
@@ -80,6 +84,8 @@ public class AtendimentoService : IAtendimentoService
         {
             return null;
         }
+
+        await _auditoria.RegistrarAsync(AcoesAuditoria.AtendimentoLido, atendimento.Id, cancellationToken: cancellationToken);
 
         return new AtendimentoDetalheDto(
             atendimento.Id,
@@ -110,6 +116,9 @@ public class AtendimentoService : IAtendimentoService
         atendimento.Status = StatusAtendimento.EmGravacao;
 
         await _db.SaveChangesAsync(cancellationToken);
+        await _auditoria.RegistrarAsync(
+            AcoesAuditoria.ConsentimentoRegistrado, atendimentoId, cancellationToken: cancellationToken);
+
         return true;
     }
 
@@ -161,23 +170,70 @@ public class AtendimentoService : IAtendimentoService
         atendimento.ErroProcessamentoIA = null;
         await _db.SaveChangesAsync(cancellationToken);
 
+        await _auditoria.RegistrarAsync(
+            AcoesAuditoria.AudioEnviado, atendimentoId, $"{duracaoSegundos}s", cancellationToken);
+
         await _fila.EnfileirarAsync(atendimentoId, cancellationToken);
         return true;
     }
 
-    public async Task<bool> ConfirmarAsync(Guid atendimentoId, RascunhoClinicoDto revisado, Guid clinicaId, CancellationToken cancellationToken = default)
+    public async Task<ResultadoAtendimento> ConfirmarAsync(
+        Guid atendimentoId, RascunhoClinicoDto revisado, Guid clinicaId, CancellationToken cancellationToken = default)
     {
         var atendimento = await BuscarAsync(atendimentoId, clinicaId, cancellationToken);
         if (atendimento is null)
         {
-            return false;
+            return ResultadoAtendimento.NaoEncontrado;
+        }
+
+        // Prontuario assinado e somente leitura (RF15): uma segunda confirmacao
+        // sobrescreveria o registro que o medico ja assinou. Correcao posterior
+        // se faz por adendo, nao por edicao do original.
+        if (atendimento.Status is StatusAtendimento.Finalizado or StatusAtendimento.Cancelado)
+        {
+            return ResultadoAtendimento.Conflito;
         }
 
         await _output.ConfirmarAsync(atendimentoId, revisado, cancellationToken);
 
         atendimento.Status = StatusAtendimento.Finalizado;
         await _db.SaveChangesAsync(cancellationToken);
-        return true;
+
+        await _auditoria.RegistrarAsync(
+            AcoesAuditoria.RegistroConfirmado, atendimentoId, cancellationToken: cancellationToken);
+
+        return ResultadoAtendimento.Ok;
+    }
+
+    public async Task<ResultadoAtendimento> ReprocessarAsync(
+        Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default)
+    {
+        var atendimento = await DaClinica(clinicaId)
+            .Include(a => a.GravacaoAudio)
+            .SingleOrDefaultAsync(a => a.Id == atendimentoId, cancellationToken);
+
+        if (atendimento is null)
+        {
+            return ResultadoAtendimento.NaoEncontrado;
+        }
+
+        // Sem audio nao ha o que reprocessar, e um registro encerrado nao volta
+        // atras - a IA nao pode mexer no que ja foi assinado ou exportado.
+        if (atendimento.GravacaoAudio is null
+            || atendimento.Status is StatusAtendimento.Finalizado or StatusAtendimento.Cancelado)
+        {
+            return ResultadoAtendimento.Conflito;
+        }
+
+        atendimento.Status = StatusAtendimento.ProcessandoIA;
+        atendimento.ErroProcessamentoIA = null;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        await _auditoria.RegistrarAsync(
+            AcoesAuditoria.ProcessamentoSolicitado, atendimentoId, cancellationToken: cancellationToken);
+
+        await _fila.EnfileirarAsync(atendimentoId, cancellationToken);
+        return ResultadoAtendimento.Ok;
     }
 
     public async Task<bool> CancelarAsync(Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default)
@@ -190,6 +246,10 @@ public class AtendimentoService : IAtendimentoService
 
         atendimento.Status = StatusAtendimento.Cancelado;
         await _db.SaveChangesAsync(cancellationToken);
+
+        await _auditoria.RegistrarAsync(
+            AcoesAuditoria.AtendimentoCancelado, atendimentoId, cancellationToken: cancellationToken);
+
         return true;
     }
 
@@ -233,7 +293,19 @@ public class AtendimentoService : IAtendimentoService
         Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default)
     {
         var existe = await DaClinica(clinicaId).AnyAsync(a => a.Id == atendimentoId, cancellationToken);
-        return existe ? await _exportador.EnviarAsync(atendimentoId, cancellationToken) : null;
+        if (!existe)
+        {
+            return null;
+        }
+
+        var resultado = await _exportador.EnviarAsync(atendimentoId, cancellationToken);
+        await _auditoria.RegistrarAsync(
+            AcoesAuditoria.NotaExportada,
+            atendimentoId,
+            resultado.Sucesso ? "entregue" : resultado.Erro,
+            cancellationToken);
+
+        return resultado;
     }
 
     public async Task<DadosPdfNota?> ObterDadosPdfAsync(
@@ -256,6 +328,9 @@ public class AtendimentoService : IAtendimentoService
 
         var documento = atendimento.PacienteRef!.Cpf
             ?? (atendimento.PacienteRef.IdExternoEmr is { } externo ? $"EMR {externo}" : null);
+
+        await _auditoria.RegistrarAsync(
+            AcoesAuditoria.NotaBaixadaPdf, atendimentoId, cancellationToken: cancellationToken);
 
         return new DadosPdfNota(
             atendimento.Medico!.Clinica!.Nome,

@@ -9,4 +9,7 @@ public interface IArmazenamentoAudio
     Task<string> SalvarAsync(Guid atendimentoId, Stream conteudo, string tipoConteudo, CancellationToken cancellationToken = default);
 
     Task<Stream> AbrirAsync(string chave, CancellationToken cancellationToken = default);
+
+    /// <summary>Apaga o audio do storage. Usado pela politica de retencao (LGPD) apos a transcricao.</summary>
+    Task RemoverAsync(string chave, CancellationToken cancellationToken = default);
 }
