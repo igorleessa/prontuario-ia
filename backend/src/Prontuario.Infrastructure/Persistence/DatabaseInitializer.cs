@@ -15,6 +15,47 @@ namespace Prontuario.Infrastructure.Persistence;
 public class DatabaseInitializer
 {
     /// <summary>
+    /// Cria o administrador em uma clinica que ainda nao tem nenhum, sem tocar
+    /// no resto do banco. Idempotente.
+    /// </summary>
+    private async Task GarantirAdministradorAsync(CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(_seed.EmailAdministrador) || string.IsNullOrWhiteSpace(_seed.Senha))
+        {
+            return;
+        }
+
+        if (await _db.Usuarios.AnyAsync(u => u.Email == _seed.EmailAdministrador, cancellationToken))
+        {
+            return;
+        }
+
+        var clinicaId = await _db.Clinicas
+            .OrderBy(c => c.CriadoEm)
+            .Select(c => (Guid?)c.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (clinicaId is null)
+        {
+            return;
+        }
+
+        var administrador = new Usuario
+        {
+            ClinicaId = clinicaId.Value,
+            Nome = _seed.NomeAdministrador,
+            Email = _seed.EmailAdministrador,
+            Papel = PapelUsuario.Administrador,
+        };
+        administrador.SenhaHash = _passwordHasher.HashPassword(administrador, _seed.Senha);
+
+        _db.Usuarios.Add(administrador);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Administrador {Email} criado na clinica existente.", administrador.Email);
+    }
+
+    /// <summary>
     /// Catalogo de templates: independe do seed de teste, porque e conteudo do
     /// produto, nao dado de demonstracao. Idempotente por nome.
     /// </summary>
@@ -77,6 +118,11 @@ public class DatabaseInitializer
         if (await _db.Usuarios.AnyAsync(cancellationToken))
         {
             _logger.LogInformation("Banco ja possui usuarios. Seed ignorado.");
+
+            // Instalacao anterior a existencia do papel de administrador ficaria
+            // sem ninguem capaz de configurar a clinica, e recriar o banco so
+            // por isso custaria os atendimentos ja registrados.
+            await GarantirAdministradorAsync(cancellationToken);
             return;
         }
 
