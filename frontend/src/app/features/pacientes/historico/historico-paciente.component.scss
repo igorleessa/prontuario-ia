@@ -1,0 +1,101 @@
+.pagina {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-width: 48rem;
+}
+
+.voltar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  align-self: flex-start;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+.voltar:hover { color: var(--texto); }
+
+.ficha__meta {
+  margin-top: 0.375rem;
+  color: var(--texto-suave);
+  font-size: 0.875rem;
+}
+
+.linha-do-tempo {
+  list-style: none;
+  margin-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.evento {
+  position: relative;
+  display: flex;
+  gap: 0.875rem;
+  padding-bottom: 1rem;
+}
+
+/* A linha liga os marcadores; o ultimo evento nao a prolonga. */
+.evento:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 0.3125rem;
+  top: 1.125rem;
+  bottom: 0;
+  width: 1px;
+  background: var(--borda);
+}
+
+.evento__marca {
+  flex-shrink: 0;
+  width: 0.6875rem;
+  height: 0.6875rem;
+  margin-top: 0.375rem;
+  border-radius: 50%;
+  border: 2px solid var(--borda);
+  background: var(--superficie);
+}
+
+.evento__corpo {
+  flex: 1;
+  display: block;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  color: inherit;
+}
+
+.evento__corpo:hover { border-color: var(--texto-tenue); }
+
+.evento__topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+
+  strong {
+    font-size: 0.9375rem;
+    font-weight: 560;
+  }
+}
+
+.evento__medico {
+  margin-top: 0.125rem;
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
+.evento__campo {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+
+  span {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--texto-tenue);
+    margin-right: 0.375rem;
+  }
+}

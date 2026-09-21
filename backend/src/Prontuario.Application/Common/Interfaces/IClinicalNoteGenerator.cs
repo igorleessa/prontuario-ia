@@ -10,5 +10,20 @@ namespace Prontuario.Application.Common.Interfaces;
 public interface IClinicalNoteGenerator
 {
     Task<RascunhoClinicoDto> GerarRascunhoAsync(
-        string transcricao, CredenciaisIA credenciais, CancellationToken cancellationToken = default);
+        string transcricao,
+        CredenciaisIA credenciais,
+        ContextoGeracao contexto,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Redige um documento auxiliar (receita, pedido de exame, atestado) a partir
+    /// da consulta. Como a nota, sai como rascunho: so vale depois da revisao.
+    /// </summary>
+    Task<string> GerarDocumentoAsync(
+        string tipo,
+        string transcricao,
+        RascunhoClinicoDto registroClinico,
+        CredenciaisIA credenciais,
+        ContextoGeracao contexto,
+        CancellationToken cancellationToken = default);
 }

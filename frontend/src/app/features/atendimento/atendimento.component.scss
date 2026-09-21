@@ -330,3 +330,107 @@ form {
   line-height: 1.6;
   white-space: pre-wrap;
 }
+
+/* Estado da entrega ao EMR na Modalidade B: o medico precisa saber, sem clicar
+   em nada, se a nota chegou ao sistema de destino ou se ficou parada aqui. */
+.entrega {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie-2);
+
+  strong {
+    display: block;
+    font-size: 0.9375rem;
+    font-weight: 580;
+  }
+
+  small {
+    font-size: 0.8125rem;
+    color: var(--texto-tenue);
+    overflow-wrap: anywhere;
+  }
+}
+
+.entrega__ponto {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--texto-tenue);
+}
+
+.entrega--ok {
+  border-color: color-mix(in srgb, var(--sucesso) 35%, transparent);
+  background: var(--sucesso-suave);
+
+  strong { color: var(--sucesso); }
+
+  .entrega__ponto { background: var(--sucesso); }
+}
+
+/* Marca de campo tocado pelo medico e comparativo com a sugestao original:
+   e o que torna visivel que a revisao humana aconteceu de fato. */
+.campo__marca {
+  margin-left: 0.5rem;
+  padding: 0.0625rem 0.4375rem;
+  border-radius: 999px;
+  background: var(--superficie-2);
+  border: 1px solid var(--borda);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--texto-suave);
+}
+
+.comparativo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie-2);
+  align-items: flex-start;
+}
+
+.comparativo__lista {
+  display: grid;
+  gap: 0.75rem;
+  width: 100%;
+
+  dt {
+    font-size: 0.75rem;
+    font-weight: 560;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--texto-tenue);
+  }
+
+  dd {
+    margin-top: 0.125rem;
+    font-size: 0.875rem;
+    white-space: pre-wrap;
+  }
+}
+
+.comparativo__nota {
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
+.ficha__historico {
+  display: inline-block;
+  margin-top: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--texto-suave);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ficha__historico:hover { color: var(--texto); }

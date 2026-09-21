@@ -23,6 +23,7 @@ public class ConfiguracaoIAController : ApiControllerBase
         => Ok(await _configuracoes.ObterAsync(ClinicaId, cancellationToken));
 
     [HttpPut]
+    [Authorize(Roles = PapeisAutorizacao.Administrador)]
     public async Task<ActionResult<ConfiguracaoIADto>> Salvar(
         SalvarConfiguracaoIADto dados, CancellationToken cancellationToken)
     {
@@ -37,6 +38,7 @@ public class ConfiguracaoIAController : ApiControllerBase
     }
 
     [HttpDelete]
+    [Authorize(Roles = PapeisAutorizacao.Administrador)]
     public async Task<IActionResult> Remover(CancellationToken cancellationToken)
         => await _configuracoes.RemoverChaveAsync(ClinicaId, cancellationToken) ? NoContent() : NotFound();
 }

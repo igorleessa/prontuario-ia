@@ -11,6 +11,10 @@ public class Atendimento : BaseEntity
     public Guid MedicoId { get; set; }
     public Usuario? Medico { get; set; }
 
+    /// <summary>Template de especialidade escolhido na abertura; nulo usa o modelo generico (SOAP).</summary>
+    public Guid? TemplateNotaId { get; set; }
+    public TemplateNota? TemplateNota { get; set; }
+
     public DateTime DataHora { get; set; } = DateTime.UtcNow;
     public StatusAtendimento Status { get; set; } = StatusAtendimento.AguardandoConsentimento;
 
@@ -24,4 +28,5 @@ public class Atendimento : BaseEntity
     public ProntuarioRegistro? Prontuario { get; set; }
     public NotaExportavel? NotaExportavel { get; set; }
     public ICollection<LogAuditoria> LogsAuditoria { get; set; } = new List<LogAuditoria>();
+    public ICollection<DocumentoClinico> Documentos { get; set; } = new List<DocumentoClinico>();
 }

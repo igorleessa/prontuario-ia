@@ -9,3 +9,14 @@ export const authGuard: CanActivateFn = () => {
 
   return auth.autenticado() ? true : router.createUrlTree(['/login']);
 };
+
+/**
+ * Telas de clínica (configuração e auditoria) são do administrador. O backend
+ * recusa de qualquer forma; o guard evita mostrar uma tela que daria 403.
+ */
+export const adminGuard: CanActivateFn = () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+
+  return auth.administrador() ? true : router.createUrlTree(['/atendimentos']);
+};

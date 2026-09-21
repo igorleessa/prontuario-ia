@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend (.NET 8)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restaurar dependências
+        run: dotnet restore backend/Prontuario.sln
+
+      - name: Compilar
+        run: dotnet build backend/Prontuario.sln --configuration Release --no-restore
+
+      - name: Testes
+        run: dotnet test backend/Prontuario.sln --configuration Release --no-build --verbosity normal
+
+  frontend:
+    name: Frontend (Angular 18)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependências
+        working-directory: frontend
+        run: npm ci
+
+      # O build de produção também faz a checagem de tipos dos templates.
+      - name: Compilar
+        working-directory: frontend
+        run: npx ng build --configuration production
+
+      - name: Testes
+        working-directory: frontend
+        run: npx ng test --watch=false --browsers=ChromeHeadless
+
+  compose:
+    name: Imagens Docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Garante que os quatro Dockerfiles continuam construindo; o ambiente de
+      # demonstração do cliente sobe por aqui.
+      - name: Construir as imagens
+        run: docker compose build
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: prontuario
+          JWT_KEY: chave-de-integracao-continua-com-mais-de-32-bytes
+          MINIO_USER: ci
+          MINIO_PASSWORD: ci-senha-minio
+          SEED_EMAIL: medico@ci.test
+          SEED_SENHA: ci
+          SEED_EMAIL_ADMIN: admin@ci.test

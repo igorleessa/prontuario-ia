@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Prontuario.Application.Common.Interfaces;
 using Prontuario.Application.Common.Models;
 using Prontuario.Domain.Entities;
+using Prontuario.Domain.Enums;
 using Prontuario.Infrastructure.Persistence;
 
 namespace Prontuario.Infrastructure.Services;
@@ -49,5 +50,36 @@ public class PacienteService : IPacienteService
 
         return new PacienteResumoDto(
             paciente.Id, paciente.Nome, paciente.Cpf, paciente.DataNascimento, paciente.Contato, paciente.IdExternoEmr);
+    }
+
+    public async Task<HistoricoPacienteDto?> ObterHistoricoAsync(
+        Guid pacienteId, Guid clinicaId, CancellationToken cancellationToken = default)
+    {
+        var paciente = await _db.Pacientes
+            .SingleOrDefaultAsync(p => p.Id == pacienteId && p.ClinicaId == clinicaId, cancellationToken);
+
+        if (paciente is null)
+        {
+            return null;
+        }
+
+        // A queixa e a hipotese vem do prontuario nativo quando existe; na
+        // Modalidade B o registro definitivo esta no EMR do cliente, e a linha
+        // do tempo mostra apenas o que aconteceu aqui.
+        var atendimentos = await _db.Atendimentos
+            .Where(a => a.PacienteRefId == pacienteId)
+            .OrderByDescending(a => a.DataHora)
+            .Select(a => new HistoricoAtendimentoDto(
+                a.Id,
+                a.DataHora,
+                a.Status.ToString(),
+                a.Medico!.Nome,
+                a.Prontuario != null ? a.Prontuario.QueixaPrincipal : null,
+                a.Prontuario != null ? a.Prontuario.HipoteseDiagnostica : null,
+                a.Status == StatusAtendimento.Finalizado))
+            .ToListAsync(cancellationToken);
+
+        return new HistoricoPacienteDto(
+            paciente.Id, paciente.Nome, paciente.Cpf, paciente.DataNascimento, paciente.IdExternoEmr, atendimentos);
     }
 }

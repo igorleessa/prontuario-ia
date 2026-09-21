@@ -12,21 +12,37 @@ public class AtendimentosController : ApiControllerBase
 {
     private readonly IAtendimentoService _atendimentos;
     private readonly INotaClinicaFormatter _formatador;
+    private readonly IGeradorPdfNota _pdf;
 
-    public AtendimentosController(IAtendimentoService atendimentos, INotaClinicaFormatter formatador)
+    public AtendimentosController(
+        IAtendimentoService atendimentos, INotaClinicaFormatter formatador, IGeradorPdfNota pdf)
     {
         _atendimentos = atendimentos;
         _formatador = formatador;
+        _pdf = pdf;
     }
 
     /// <summary>Consulta longa em webm/opus fica na casa de poucos MB; 100 MB da folga sem virar porta aberta.</summary>
     private const long TamanhoMaximoAudioBytes = 100L * 1024 * 1024;
 
-    public record AbrirAtendimentoRequest(Guid PacienteRefId);
+    public record AbrirAtendimentoRequest(Guid PacienteRefId, Guid? TemplateNotaId);
 
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<AtendimentoResumoDto>>> Listar(CancellationToken cancellationToken)
         => Ok(await _atendimentos.ListarAsync(ClinicaId, cancellationToken));
+
+    /// <summary>
+    /// Numeros da clinica para a tela inicial. A linha de base de documentacao
+    /// manual e configuravel: cada especialidade tem a sua, e o numero precisa
+    /// ser do cliente, nao nosso.
+    /// </summary>
+    [HttpGet("metricas")]
+    public async Task<ActionResult<MetricasClinicaDto>> Metricas(
+        [FromServices] IConfiguration configuracao, CancellationToken cancellationToken)
+    {
+        var baseline = configuracao.GetValue("Metricas:MinutosDocumentacaoManual", 7);
+        return Ok(await _atendimentos.ObterMetricasAsync(ClinicaId, baseline, cancellationToken));
+    }
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<AtendimentoDetalheDto>> Obter(Guid id, CancellationToken cancellationToken)
@@ -38,7 +54,8 @@ public class AtendimentosController : ApiControllerBase
     [HttpPost]
     public async Task<IActionResult> Abrir(AbrirAtendimentoRequest request, CancellationToken cancellationToken)
     {
-        var id = await _atendimentos.AbrirAsync(request.PacienteRefId, UsuarioLogadoId, ClinicaId, cancellationToken);
+        var id = await _atendimentos.AbrirAsync(
+            request.PacienteRefId, UsuarioLogadoId, ClinicaId, request.TemplateNotaId, cancellationToken);
         if (id is null)
         {
             return NotFound(new { erro = "Paciente nao encontrado nesta clinica." });
@@ -78,7 +95,49 @@ public class AtendimentosController : ApiControllerBase
 
     [HttpPost("{id:guid}/confirmar")]
     public async Task<IActionResult> Confirmar(Guid id, RascunhoClinicoDto revisado, CancellationToken cancellationToken)
-        => await _atendimentos.ConfirmarAsync(id, revisado, ClinicaId, cancellationToken) ? NoContent() : NotFound();
+        => await _atendimentos.ConfirmarAsync(id, revisado, ClinicaId, cancellationToken) switch
+        {
+            ResultadoAtendimento.Ok => NoContent(),
+            ResultadoAtendimento.Conflito => Conflict(new
+            {
+                erro = "Este atendimento ja foi encerrado. Um registro assinado nao pode ser sobrescrito.",
+            }),
+            _ => NotFound(),
+        };
+
+    /// <summary>
+    /// Roda o pipeline sobre a consulta de exemplo, sem microfone nem upload.
+    /// Existe para a demonstracao ao cliente; so responde com Demonstracao:Habilitado.
+    /// </summary>
+    [HttpPost("{id:guid}/simular")]
+    public async Task<IActionResult> Simular(
+        Guid id, [FromServices] IConfiguration configuracao, CancellationToken cancellationToken)
+    {
+        if (!configuracao.GetValue<bool>("Demonstracao:Habilitado"))
+        {
+            return NotFound();
+        }
+
+        return await _atendimentos.SimularConsultaAsync(id, ClinicaId, cancellationToken) switch
+        {
+            ResultadoAtendimento.Ok => Accepted(),
+            ResultadoAtendimento.Conflito => Conflict(new { erro = "Este atendimento ja foi encerrado." }),
+            _ => NotFound(),
+        };
+    }
+
+    /// <summary>Refaz a transcricao e a extracao do audio ja gravado (RF13), sem duplicar o atendimento.</summary>
+    [HttpPost("{id:guid}/reprocessar")]
+    public async Task<IActionResult> Reprocessar(Guid id, CancellationToken cancellationToken)
+        => await _atendimentos.ReprocessarAsync(id, ClinicaId, cancellationToken) switch
+        {
+            ResultadoAtendimento.Ok => Accepted(),
+            ResultadoAtendimento.Conflito => Conflict(new
+            {
+                erro = "Nao ha audio para reprocessar neste atendimento, ou ele ja foi encerrado.",
+            }),
+            _ => NotFound(),
+        };
 
     /// <summary>
     /// Pre-visualiza a nota clinica de texto corrido (Modalidade B) para o conteudo
@@ -89,6 +148,51 @@ public class AtendimentosController : ApiControllerBase
     [HttpPost("nota-previa")]
     public ActionResult<object> PreverNota(RascunhoClinicoDto revisado)
         => Ok(new { conteudo = _formatador.Formatar(revisado) });
+
+    /// <summary>
+    /// Nota clinica gravada do atendimento e o estado da exportacao (RF20).
+    /// E a fonte da verdade do que foi - ou sera - enviado ao EMR de destino.
+    /// </summary>
+    [HttpGet("{id:guid}/nota")]
+    public async Task<ActionResult<NotaExportavelDto>> ObterNota(Guid id, CancellationToken cancellationToken)
+    {
+        var nota = await _atendimentos.ObterNotaAsync(id, ClinicaId, cancellationToken);
+        return nota is null ? NotFound() : Ok(nota);
+    }
+
+    /// <summary>Reenvia a nota ao webhook da clinica (RF19) quando o envio automatico falhou.</summary>
+    [HttpPost("{id:guid}/exportar")]
+    public async Task<ActionResult<ResultadoExportacaoDto>> Exportar(Guid id, CancellationToken cancellationToken)
+    {
+        var resultado = await _atendimentos.ExportarAsync(id, ClinicaId, cancellationToken);
+        return resultado is null ? NotFound() : Ok(resultado);
+    }
+
+    /// <summary>Baixa a nota clinica em PDF (RF18), para anexar ou imprimir no EMR do cliente.</summary>
+    [HttpGet("{id:guid}/nota.pdf")]
+    public async Task<IActionResult> BaixarNotaPdf(Guid id, CancellationToken cancellationToken)
+    {
+        var dados = await _atendimentos.ObterDadosPdfAsync(id, ClinicaId, cancellationToken);
+        if (dados is null)
+        {
+            return NotFound();
+        }
+
+        var arquivo = $"nota-{dados.DataHora:yyyy-MM-dd}-{Sanitizar(dados.PacienteNome)}.pdf";
+        return File(_pdf.Gerar(dados), "application/pdf", arquivo);
+    }
+
+    /// <summary>Nome de arquivo sem acentos, espacos ou barras - alguns navegadores e EMRs nao lidam bem com eles.</summary>
+    private static string Sanitizar(string nome)
+    {
+        var normalizado = new string(nome.Normalize(System.Text.NormalizationForm.FormD)
+            .Where(c => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c)
+                != System.Globalization.UnicodeCategory.NonSpacingMark)
+            .Select(c => char.IsLetterOrDigit(c) ? char.ToLowerInvariant(c) : '-')
+            .ToArray());
+
+        return string.Join('-', normalizado.Split('-', StringSplitOptions.RemoveEmptyEntries));
+    }
 
     [HttpPost("{id:guid}/cancelar")]
     public async Task<IActionResult> Cancelar(Guid id, CancellationToken cancellationToken)

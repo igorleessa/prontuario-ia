@@ -1,0 +1,66 @@
+<div class="pagina">
+  <a class="voltar" routerLink="/atendimentos">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
+      <path d="m15 18-6-6 6-6" />
+    </svg>
+    Atendimentos
+  </a>
+
+  <div>
+    <h1>Meu perfil</h1>
+    <p class="pagina__subtitulo">
+      Como a IA deve escrever as suas notas. Vale só para você — não muda nada para os outros
+      profissionais da clínica.
+    </p>
+  </div>
+
+  @if (erro()) {
+    <p class="aviso aviso--erro" role="alert">{{ erro() }}</p>
+  }
+  @if (sucesso()) {
+    <p class="aviso aviso--sucesso" role="status">{{ sucesso() }}</p>
+  }
+
+  <div class="cartao">
+    <div class="cartao__corpo">
+      @if (carregando()) {
+        <div class="vazio">Carregando…</div>
+      } @else {
+        @if (perfil(); as p) {
+          <div class="identificacao">
+            <strong>{{ p.nome }}</strong>
+            <small>{{ p.email }}</small>
+          </div>
+        }
+
+        <form [formGroup]="form" (ngSubmit)="salvar()" novalidate>
+          <div class="campo">
+            <label class="campo__rotulo" for="estilo">Preferências de redação</label>
+            <textarea id="estilo" formControlName="instrucoesEstilo" rows="7"
+                      placeholder="Uma preferência por linha."></textarea>
+            <span class="campo__dica">
+              Entram como orientação no prompt, abaixo das regras fixas: a IA continua proibida de
+              registrar o que a consulta não disse.
+            </span>
+          </div>
+
+          <div class="exemplos">
+            <span class="exemplos__rotulo">Exemplos:</span>
+            @for (exemplo of exemplos; track exemplo) {
+              <button type="button" class="exemplo" (click)="aplicarExemplo(exemplo)">
+                {{ exemplo }}
+              </button>
+            }
+          </div>
+
+          <div class="acoes">
+            <button type="submit" class="botao" [disabled]="salvando()">
+              {{ salvando() ? 'Salvando…' : 'Salvar preferências' }}
+            </button>
+          </div>
+        </form>
+      }
+    </div>
+  </div>
+</div>

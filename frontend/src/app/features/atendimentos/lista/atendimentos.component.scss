@@ -150,3 +150,41 @@
   .item__data { grid-column: 1; }
   .item__cancelar { opacity: 1; }
 }
+
+/* Numeros da clinica. O percentual e estimativa declarada - a linha de base de
+   digitacao manual e configuravel por ambiente, para ser do cliente e nao nossa. */
+.indicadores {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem;
+}
+
+.indicador {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+}
+
+.indicador__valor {
+  font-size: 1.375rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.indicador__rotulo {
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+  text-wrap: balance;
+}
+
+.indicador--destaque {
+  border-color: color-mix(in srgb, var(--sucesso) 35%, transparent);
+  background: var(--sucesso-suave);
+
+  .indicador__valor { color: var(--sucesso); }
+}

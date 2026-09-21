@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Prontuario.Application.Common.Interfaces;
 using Prontuario.Application.Common.Models;
 using Prontuario.Domain.Entities;
 using Prontuario.Infrastructure.Persistence;
@@ -13,8 +14,13 @@ namespace Prontuario.Infrastructure.Services;
 public class ProntuarioNativoOutput
 {
     private readonly ApplicationDbContext _db;
+    private readonly IUsuarioAtual _usuario;
 
-    public ProntuarioNativoOutput(ApplicationDbContext db) => _db = db;
+    public ProntuarioNativoOutput(ApplicationDbContext db, IUsuarioAtual usuario)
+    {
+        _db = db;
+        _usuario = usuario;
+    }
 
     public async Task ConfirmarAsync(Guid atendimentoId, RascunhoClinicoDto revisado, CancellationToken cancellationToken = default)
     {
@@ -30,6 +36,7 @@ public class ProntuarioNativoOutput
         prontuario.Conduta = revisado.Conduta;
         prontuario.Finalizado = true;
         prontuario.AssinadoEm = DateTime.UtcNow;
+        prontuario.AssinadoPorId = _usuario.Id;
 
         if (_db.Entry(prontuario).State == EntityState.Detached)
         {

@@ -125,6 +125,7 @@ if (-not $PularPerguntas) {
     Write-Host ''
     Write-Info '=== Usuario inicial da aplicacao (para login) ==='
     $SeedEmail = Read-ComPadrao 'E-mail do medico' 'medico@local.test'
+    $SeedEmailAdmin = Read-ComPadrao 'E-mail do administrador (configura a clinica)' 'admin@local.test'
     $SeedSenha = Read-Senha 'Senha do medico'
     $SeedNomeMedico = Read-ComPadrao 'Nome do medico' 'Medico de Teste'
     $SeedNomeClinica = Read-ComPadrao 'Nome da clinica' 'Clinica de Teste'
@@ -148,6 +149,9 @@ if (-not $PularPerguntas) {
     Write-Info 'Gerando chave JWT aleatoria...'
     $JwtKey = New-ChaveAleatoria
 
+    # Segredo do webhook usado pelo EMR de demonstracao para conferir a assinatura.
+    $EmrDemoSecret = (New-ChaveAleatoria) -replace '[^A-Za-z0-9]', ''
+
     $agora = (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd HH:mm:ss')
     $conteudo = @"
 # Gerado por scripts/setup.ps1 em $agora UTC
@@ -165,6 +169,10 @@ JWT_EXPIRACAO_MINUTOS=60
 
 SEED_HABILITADO=true
 SEED_EMAIL=$SeedEmail
+# As telas de configuracao exigem o papel de administrador; o login de medico
+# nao mexe em credenciais nem no destino de exportacao da clinica.
+SEED_EMAIL_ADMIN=$SeedEmailAdmin
+SEED_NOME_ADMIN=Administrador da Clinica
 SEED_SENHA=$SeedSenha
 SEED_NOME_MEDICO=$SeedNomeMedico
 SEED_NOME_CLINICA=$SeedNomeClinica
@@ -175,8 +183,23 @@ MINIO_PASSWORD=$MinioPassword
 MINIO_PORT=9000
 MINIO_CONSOLE_PORT=9001
 
+# Dias que o audio bruto fica guardado depois de transcrito (LGPD).
+AUDIO_RETENCAO_DIAS=30
+
+# Botao "Simular consulta" na tela do atendimento (demonstracao ao cliente).
+DEMONSTRACAO_HABILITADA=true
+
+# Linha de base de documentacao manual usada no calculo de tempo economizado.
+MINUTOS_DOCUMENTACAO_MANUAL=7
+
 BACKEND_PORT=$BackendPort
 FRONTEND_PORT=$FrontendPort
+
+# EMR ficticio da demonstracao: recebe a nota pelo webhook e a exibe como se
+# fosse o prontuario do cliente. O segredo e o mesmo que se cadastra na tela
+# de Configuracoes > Exportacao para o EMR.
+EMR_DEMO_PORT=9080
+EMR_DEMO_SECRET=$EmrDemoSecret
 "@
 
     # UTF8 sem BOM: o Docker Compose nao interpreta BOM no .env.
@@ -226,8 +249,14 @@ try {
         Write-Host "  Frontend:       http://localhost:$($config['FRONTEND_PORT'])"
         Write-Host "  API (Swagger):  http://localhost:$backendPort/swagger"
         Write-Host "  MinIO console:  http://localhost:$($config['MINIO_CONSOLE_PORT'])"
+        Write-Host "  EMR de demo:    http://localhost:$($config['EMR_DEMO_PORT'])"
+        Write-Host ""
+        Write-Host "  Para demonstrar a modalidade Conector, cadastre em Configuracoes:"
+        Write-Host "    Webhook:      http://emr-demo:8080/webhook"
+        Write-Host "    Segredo:      $($config['EMR_DEMO_SECRET'])"
         Write-Host ''
-        Write-Host "  Login:          $($config['SEED_EMAIL'])"
+        Write-Host "  Login medico:   $($config['SEED_EMAIL'])"
+        Write-Host "  Login admin:    $($config['SEED_EMAIL_ADMIN']) (mesma senha; configura a clinica)"
         Write-Host "  Modalidade:     $($config['SEED_MODO_OPERACAO'])"
         Write-Host ''
         Write-Host '  Logs:           docker compose logs -f'

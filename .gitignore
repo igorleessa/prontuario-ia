@@ -13,6 +13,7 @@ npm-debug.log*
 # Ambiente
 .env
 .env.local
+.env.backup-*
 
 # IDE
 .vs/

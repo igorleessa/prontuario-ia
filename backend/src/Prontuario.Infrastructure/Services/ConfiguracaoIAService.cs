@@ -21,13 +21,18 @@ public class ConfiguracaoIAService : IConfiguracaoIAService
 
     private readonly ApplicationDbContext _db;
     private readonly IDataProtector _protetor;
+    private readonly IAuditoriaService _auditoria;
     private readonly ILogger<ConfiguracaoIAService> _logger;
 
     public ConfiguracaoIAService(
-        ApplicationDbContext db, IDataProtectionProvider protecao, ILogger<ConfiguracaoIAService> logger)
+        ApplicationDbContext db,
+        IDataProtectionProvider protecao,
+        IAuditoriaService auditoria,
+        ILogger<ConfiguracaoIAService> logger)
     {
         _db = db;
         _protetor = protecao.CreateProtector(Proposito);
+        _auditoria = auditoria;
         _logger = logger;
     }
 
@@ -74,6 +79,9 @@ public class ConfiguracaoIAService : IConfiguracaoIAService
         configuracao.AtualizadoPorId = usuarioId;
 
         await _db.SaveChangesAsync(cancellationToken);
+        await _auditoria.RegistrarAsync(
+            AcoesAuditoria.ConfiguracaoAlterada, detalhe: "credenciais de IA atualizadas",
+            cancellationToken: cancellationToken);
 
         return new ConfiguracaoIADto(
             true, configuracao.ChaveApiSufixo, configuracao.ModeloTranscricao,
@@ -90,6 +98,11 @@ public class ConfiguracaoIAService : IConfiguracaoIAService
 
         _db.ConfiguracoesIA.Remove(configuracao);
         await _db.SaveChangesAsync(cancellationToken);
+
+        await _auditoria.RegistrarAsync(
+            AcoesAuditoria.ConfiguracaoAlterada, detalhe: "chave de IA removida",
+            cancellationToken: cancellationToken);
+
         return true;
     }
 

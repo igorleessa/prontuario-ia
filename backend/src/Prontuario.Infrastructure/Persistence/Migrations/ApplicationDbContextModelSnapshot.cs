@@ -54,11 +54,16 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
+                    b.Property<Guid?>("TemplateNotaId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("MedicoId");
 
                     b.HasIndex("PacienteRefId");
+
+                    b.HasIndex("TemplateNotaId");
 
                     b.ToTable("Atendimentos");
                 });
@@ -68,6 +73,17 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ChaveIntegracaoCriadaEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ChaveIntegracaoHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ChaveIntegracaoPrefixo")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
 
                     b.Property<DateTime>("CriadoEm")
                         .HasColumnType("timestamp with time zone");
@@ -82,7 +98,7 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
-                    b.Property<string>("WebhookSecret")
+                    b.Property<string>("WebhookSecretProtegido")
                         .HasColumnType("text");
 
                     b.Property<string>("WebhookUrl")
@@ -90,6 +106,8 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(500)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ChaveIntegracaoHash");
 
                     b.ToTable("Clinicas");
                 });
@@ -139,6 +157,38 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                     b.ToTable("ConfiguracoesIA");
                 });
 
+            modelBuilder.Entity("Prontuario.Domain.Entities.DocumentoClinico", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AtendimentoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Conteudo")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("GeradoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AtendimentoId", "Tipo")
+                        .IsUnique();
+
+                    b.ToTable("Documentos");
+                });
+
             modelBuilder.Entity("Prontuario.Domain.Entities.GravacaoAudio", b =>
                 {
                     b.Property<Guid>("Id")
@@ -178,11 +228,15 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
-                    b.Property<Guid>("AtendimentoId")
+                    b.Property<Guid?>("AtendimentoId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CriadoEm")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Detalhe")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<Guid>("UsuarioId")
                         .HasColumnType("uuid");
@@ -190,6 +244,8 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AtendimentoId");
+
+                    b.HasIndex("CriadoEm");
 
                     b.HasIndex("UsuarioId");
 
@@ -213,16 +269,26 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Destino")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<DateTime?>("ExportadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("RevisadaEm")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<int>("TentativasExportacao")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UltimoErroExportacao")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.HasKey("Id");
 
@@ -364,6 +430,46 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                     b.ToTable("RascunhosIA");
                 });
 
+            modelBuilder.Entity("Prontuario.Domain.Entities.TemplateNota", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Ativo")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("ClinicaId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Especialidade")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("Instrucoes")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("Nome")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<int>("Ordem")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClinicaId");
+
+                    b.ToTable("TemplatesNota");
+                });
+
             modelBuilder.Entity("Prontuario.Domain.Entities.Transcricao", b =>
                 {
                     b.Property<Guid>("Id")
@@ -410,6 +516,9 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<string>("InstrucoesEstilo")
+                        .HasColumnType("text");
+
                     b.Property<string>("Nome")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -448,9 +557,15 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Prontuario.Domain.Entities.TemplateNota", "TemplateNota")
+                        .WithMany()
+                        .HasForeignKey("TemplateNotaId");
+
                     b.Navigation("Medico");
 
                     b.Navigation("PacienteRef");
+
+                    b.Navigation("TemplateNota");
                 });
 
             modelBuilder.Entity("Prontuario.Domain.Entities.ConfiguracaoIA", b =>
@@ -462,6 +577,17 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Clinica");
+                });
+
+            modelBuilder.Entity("Prontuario.Domain.Entities.DocumentoClinico", b =>
+                {
+                    b.HasOne("Prontuario.Domain.Entities.Atendimento", "Atendimento")
+                        .WithMany("Documentos")
+                        .HasForeignKey("AtendimentoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Atendimento");
                 });
 
             modelBuilder.Entity("Prontuario.Domain.Entities.GravacaoAudio", b =>
@@ -480,8 +606,7 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                     b.HasOne("Prontuario.Domain.Entities.Atendimento", "Atendimento")
                         .WithMany("LogsAuditoria")
                         .HasForeignKey("AtendimentoId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Prontuario.Domain.Entities.Usuario", "Usuario")
                         .WithMany()
@@ -538,6 +663,16 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                     b.Navigation("Transcricao");
                 });
 
+            modelBuilder.Entity("Prontuario.Domain.Entities.TemplateNota", b =>
+                {
+                    b.HasOne("Prontuario.Domain.Entities.Clinica", "Clinica")
+                        .WithMany()
+                        .HasForeignKey("ClinicaId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Clinica");
+                });
+
             modelBuilder.Entity("Prontuario.Domain.Entities.Transcricao", b =>
                 {
                     b.HasOne("Prontuario.Domain.Entities.GravacaoAudio", "GravacaoAudio")
@@ -562,6 +697,8 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("Prontuario.Domain.Entities.Atendimento", b =>
                 {
+                    b.Navigation("Documentos");
+
                     b.Navigation("GravacaoAudio");
 
                     b.Navigation("LogsAuditoria");

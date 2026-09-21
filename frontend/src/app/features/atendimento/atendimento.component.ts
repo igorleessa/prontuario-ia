@@ -7,10 +7,13 @@ import {
   CLASSE_STATUS,
   ROTULO_STATUS,
 } from '../../core/models/atendimento.model';
+import { NotaExportavel, ResultadoExportacao } from '../../core/models/exportacao.model';
 import { RascunhoClinico } from '../../core/models/rascunho-clinico.model';
 import { AtendimentoService } from '../../core/services/atendimento.service';
+import { AppConfigService } from '../../core/services/app-config.service';
 import { AuthService } from '../../core/services/auth.service';
 import { GravacaoAudioService } from '../../core/services/gravacao-audio.service';
+import { DocumentosComponent } from './documentos/documentos.component';
 
 type Etapa = 'consentimento' | 'gravacao' | 'processando' | 'revisao' | 'encerrado';
 
@@ -25,7 +28,7 @@ type Visao = 'estruturado' | 'nota';
 @Component({
   selector: 'app-atendimento',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, DatePipe],
+  imports: [ReactiveFormsModule, RouterLink, DatePipe, DocumentosComponent],
   templateUrl: './atendimento.component.html',
   styleUrl: './atendimento.component.scss',
 })
@@ -34,6 +37,7 @@ export class AtendimentoComponent {
   private readonly gravacaoAudio = inject(GravacaoAudioService);
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
+  private readonly configuracaoApp = inject(AppConfigService);
 
   /** Vem do parametro de rota via withComponentInputBinding(). */
   readonly id = input.required<string>();
@@ -52,6 +56,17 @@ export class AtendimentoComponent {
   readonly transcricao = signal<string | null>(null);
   readonly erroIA = signal<string | null>(null);
   readonly mostrarTranscricao = signal(false);
+  readonly notaGravada = signal<NotaExportavel | null>(null);
+  readonly exportando = signal(false);
+  readonly resultadoExportacao = signal<ResultadoExportacao | null>(null);
+  readonly baixandoPdf = signal(false);
+  readonly reprocessando = signal(false);
+  readonly simulando = signal(false);
+  readonly sugestaoIa = signal<RascunhoClinico | null>(null);
+  readonly mostrarSugestao = signal(false);
+
+  /** Botão de consulta simulada só aparece quando o servidor libera o modo demonstração. */
+  readonly demonstracao = this.configuracaoApp.demonstracao;
 
   readonly gravando = this.gravacaoAudio.gravando;
   readonly rotuloStatus = ROTULO_STATUS;
@@ -91,6 +106,7 @@ export class AtendimentoComponent {
   // O alias do @if nao alcanca o interior dos blocos @switch do template.
   readonly consentimentoEm = computed(() => this.atendimento()?.consentimentoEm ?? null);
   readonly finalizado = computed(() => this.atendimento()?.status === 'Finalizado');
+  readonly templateNome = computed(() => this.atendimento()?.templateNome ?? null);
 
   /** Formato que a clinica de fato exporta, usado apenas para orientar o medico. */
   readonly modoOperacao = computed(() => this.auth.usuario()?.modoOperacao ?? null);
@@ -137,6 +153,7 @@ export class AtendimentoComponent {
       next: (detalhe) => {
         this.atendimento.set(detalhe);
         this.transcricao.set(detalhe.transcricao);
+        this.sugestaoIa.set(detalhe.sugestaoIa);
         this.erroIA.set(detalhe.erroProcessamentoIA);
         this.form.patchValue({
           queixaPrincipal: detalhe.rascunho.queixaPrincipal ?? '',
@@ -262,6 +279,69 @@ export class AtendimentoComponent {
     });
   }
 
+  /**
+   * Campos em que o texto atual difere do que a IA sugeriu. É o que transforma
+   * "a revisão humana é obrigatória" em algo visível na tela.
+   */
+  editadoPeloMedico(campo: keyof RascunhoClinico): boolean {
+    const sugestao = this.sugestaoIa();
+    if (!sugestao) {
+      return false;
+    }
+
+    const atual = (this.form.getRawValue()[campo] ?? '').trim();
+    return atual !== (sugestao[campo] ?? '').trim();
+  }
+
+  alternarSugestao(): void {
+    this.mostrarSugestao.update((valor) => !valor);
+  }
+
+  /** Roda o pipeline sobre a consulta de exemplo, sem depender de microfone. */
+  simularConsulta(): void {
+    if (this.simulando()) {
+      return;
+    }
+
+    this.simulando.set(true);
+    this.erro.set(null);
+
+    this.atendimentos.simular(this.id()).subscribe({
+      next: () => {
+        this.simulando.set(false);
+        this.atualizarStatus('ProcessandoIA');
+        this.acompanharProcessamento();
+      },
+      error: () => {
+        this.simulando.set(false);
+        this.erro.set('Não foi possível iniciar a consulta simulada.');
+      },
+    });
+  }
+
+  /** Tenta de novo a transcrição que falhou, sem abrir outro atendimento (RF13). */
+  reprocessar(): void {
+    if (this.reprocessando()) {
+      return;
+    }
+
+    this.reprocessando.set(true);
+    this.erro.set(null);
+
+    this.atendimentos.reprocessar(this.id()).subscribe({
+      next: () => {
+        this.reprocessando.set(false);
+        this.erroIA.set(null);
+        this.atualizarStatus('ProcessandoIA');
+        this.acompanharProcessamento();
+      },
+      error: (erro: { error?: { erro?: string } }) => {
+        this.reprocessando.set(false);
+        this.erro.set(erro.error?.erro ?? 'Não foi possível reprocessar o áudio.');
+      },
+    });
+  }
+
   confirmar(): void {
     if (this.salvando()) {
       return;
@@ -278,8 +358,17 @@ export class AtendimentoComponent {
           this.atualizarStatus('Finalizado');
           this.form.disable();
         },
-        error: () => {
+        error: (erro: { status?: number; error?: { erro?: string } }) => {
           this.salvando.set(false);
+
+          // 409 e o registro ja assinado se protegendo: recarregar mostra o
+          // estado real em vez de deixar o medico tentando salvar de novo.
+          if (erro.status === 409) {
+            this.erro.set(erro.error?.erro ?? 'Este atendimento já foi encerrado.');
+            this.carregar(this.id(), true);
+            return;
+          }
+
           this.erro.set('Não foi possível finalizar o atendimento.');
         },
       });
@@ -307,6 +396,58 @@ export class AtendimentoComponent {
     }
   }
 
+  /** Reenvia a nota ao EMR quando o envio automático falhou (RF19). */
+  reenviarAoEmr(): void {
+    if (this.exportando()) {
+      return;
+    }
+
+    this.exportando.set(true);
+    this.erro.set(null);
+    this.resultadoExportacao.set(null);
+
+    this.atendimentos.exportar(this.id()).subscribe({
+      next: (resultado) => {
+        this.exportando.set(false);
+        this.resultadoExportacao.set(resultado);
+
+        // O status e as tentativas mudam no servidor a cada envio.
+        this.atendimentos.obterNota(this.id()).subscribe({
+          next: (nota) => this.notaGravada.set(nota),
+        });
+      },
+      error: () => {
+        this.exportando.set(false);
+        this.erro.set('Não foi possível reenviar a nota.');
+      },
+    });
+  }
+
+  baixarPdf(): void {
+    if (this.baixandoPdf()) {
+      return;
+    }
+
+    this.baixandoPdf.set(true);
+    this.erro.set(null);
+
+    this.atendimentos.baixarNotaPdf(this.id()).subscribe({
+      next: (arquivo) => {
+        this.baixandoPdf.set(false);
+        const url = URL.createObjectURL(arquivo);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `nota-${this.atendimento()?.pacienteNome ?? 'paciente'}.pdf`;
+        link.click();
+        URL.revokeObjectURL(url);
+      },
+      error: () => {
+        this.baixandoPdf.set(false);
+        this.erro.set('Não foi possível gerar o PDF.');
+      },
+    });
+  }
+
   voltarParaLista(): void {
     this.router.navigate(['/atendimentos']);
   }
@@ -315,6 +456,24 @@ export class AtendimentoComponent {
     this.carregandoNota.set(true);
     this.notaCopiada.set(false);
     this.erro.set(null);
+
+    // Depois de encerrado, a nota gravada e a fonte da verdade: e o texto que
+    // foi (ou sera) enviado ao EMR. Durante a revisao a previa acompanha o que
+    // o medico esta digitando.
+    if (this.etapa() === 'encerrado') {
+      this.atendimentos.obterNota(this.id()).subscribe({
+        next: (nota) => {
+          this.notaGravada.set(nota);
+          this.nota.set(nota.conteudo);
+          this.carregandoNota.set(false);
+        },
+        error: () => {
+          this.carregandoNota.set(false);
+          this.erro.set('Não foi possível carregar a nota clínica.');
+        },
+      });
+      return;
+    }
 
     this.atendimentos.preverNota(this.conteudoRevisado()).subscribe({
       next: ({ conteudo }) => {

@@ -27,5 +27,44 @@ public sealed record AtendimentoDetalheDto(
     bool ConsentimentoGravacao,
     DateTime? ConsentimentoEm,
     RascunhoClinicoDto Rascunho,
+    /// <summary>
+    /// Sugestao original da IA, preservada mesmo depois de o medico editar.
+    /// Permite mostrar lado a lado o que a IA propos e o que ficou no registro -
+    /// a revisao humana deixa de ser promessa e vira evidencia.
+    /// </summary>
+    RascunhoClinicoDto? SugestaoIA,
     string? Transcricao,
-    string? ErroProcessamentoIA);
+    string? ErroProcessamentoIA,
+    string? TemplateNome,
+    int? DuracaoGravacaoSegundos);
+
+/// <summary>
+/// Numeros da clinica para a tela de atendimentos. O tempo economizado e uma
+/// estimativa declarada: compara o tempo real entre o fim da consulta e a
+/// confirmacao do registro com uma linha de base de digitacao manual,
+/// configuravel por ambiente.
+/// </summary>
+public sealed record MetricasClinicaDto(
+    int AtendimentosFinalizados,
+    int MinutosDeConsultaDocumentados,
+    int? TempoMedioRevisaoSegundos,
+    int MinutosDocumentacaoManualEstimados,
+    int? EconomiaPercentualEstimada);
+
+/// <summary>Historico de atendimentos de um paciente (RF16).</summary>
+public sealed record HistoricoPacienteDto(
+    Guid PacienteId,
+    string PacienteNome,
+    string? Cpf,
+    DateOnly? DataNascimento,
+    string? IdExternoEmr,
+    IReadOnlyList<HistoricoAtendimentoDto> Atendimentos);
+
+public sealed record HistoricoAtendimentoDto(
+    Guid Id,
+    DateTime DataHora,
+    string Status,
+    string MedicoNome,
+    string? QueixaPrincipal,
+    string? HipoteseDiagnostica,
+    bool Finalizado);

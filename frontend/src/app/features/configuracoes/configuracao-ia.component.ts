@@ -4,11 +4,12 @@ import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ConfiguracaoIA } from '../../core/models/configuracao-ia.model';
 import { ConfiguracaoIAService } from '../../core/services/configuracao-ia.service';
+import { ConfiguracaoExportacaoComponent } from './exportacao/configuracao-exportacao.component';
 
 @Component({
   selector: 'app-configuracao-ia',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, DatePipe],
+  imports: [ReactiveFormsModule, RouterLink, DatePipe, ConfiguracaoExportacaoComponent],
   templateUrl: './configuracao-ia.component.html',
   styleUrl: './configuracao-ia.component.scss',
 })

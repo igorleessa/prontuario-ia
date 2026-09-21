@@ -1,6 +1,8 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Prontuario.Api;
+using Prontuario.Application.Common.Interfaces;
 using Prontuario.Infrastructure;
 using Prontuario.Infrastructure.Persistence;
 
@@ -9,6 +11,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IUsuarioAtual, UsuarioAtual>();
 
 builder.Services.AddInfrastructure(builder.Configuration);
 
@@ -74,5 +79,12 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
+
+// Capacidades que a interface precisa conhecer antes do login. Nao carrega
+// nenhum dado de clinica nem de paciente.
+app.MapGet("/api/configuracao-app", (IConfiguration configuracao) => Results.Ok(new
+{
+    demonstracao = configuracao.GetValue<bool>("Demonstracao:Habilitado"),
+}));
 
 app.Run();

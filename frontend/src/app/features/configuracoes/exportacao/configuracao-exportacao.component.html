@@ -1,0 +1,130 @@
+<div class="cartao">
+  <div class="cartao__corpo">
+    <h2>Exportação para o EMR</h2>
+    <p class="secao__texto">
+      Para onde a nota clínica revisada é enviada e com que chave o sistema do cliente abre
+      atendimentos aqui. É a configuração da modalidade Conector.
+    </p>
+
+    @if (!modoConector()) {
+      <p class="aviso aviso--info">
+        Esta clínica opera no modo Integrado — o prontuário fica neste sistema. A exportação
+        continua disponível para enviar cópias da nota a um sistema externo.
+      </p>
+    }
+
+    @if (erro()) {
+      <p class="aviso aviso--erro" role="alert">{{ erro() }}</p>
+    }
+    @if (sucesso()) {
+      <p class="aviso aviso--sucesso" role="status">{{ sucesso() }}</p>
+    }
+
+    @if (carregando()) {
+      <div class="vazio">Carregando…</div>
+    } @else {
+      <div class="estado" [class.estado--ativo]="configuracao()?.webhookUrl">
+        <span class="estado__ponto" aria-hidden="true"></span>
+        <div>
+          @if (configuracao()?.webhookUrl) {
+            <strong>Envio automático ativo</strong>
+            <small>
+              A nota é enviada a {{ configuracao()?.webhookUrl }}
+              @if (configuracao()?.segredoConfigurado) { · assinada com o segredo cadastrado }
+              @else { · <span class="alerta-inline">sem assinatura — cadastre um segredo</span> }
+            </small>
+          } @else {
+            <strong>Envio automático desligado</strong>
+            <small>Sem webhook, o médico exporta a nota copiando o texto ou baixando o PDF.</small>
+          }
+        </div>
+      </div>
+
+      <form [formGroup]="form" (ngSubmit)="salvar()" novalidate>
+        <div class="campo">
+          <label class="campo__rotulo" for="webhook-url">URL do webhook</label>
+          <input id="webhook-url" type="url" formControlName="webhookUrl" autocomplete="off"
+                 spellcheck="false" placeholder="https://emr-do-cliente/api/notas" />
+          <span class="campo__dica">
+            Endpoint do EMR que recebe a nota em JSON. Deixe em branco para desligar o envio automático.
+          </span>
+        </div>
+
+        <div class="campo">
+          <label class="campo__rotulo" for="webhook-secret">Segredo de assinatura</label>
+          <input id="webhook-secret" type="password" formControlName="webhookSecret" autocomplete="off"
+                 spellcheck="false"
+                 [placeholder]="configuracao()?.segredoConfigurado ? 'Deixe em branco para manter o atual' : 'segredo combinado com o cliente'" />
+          <span class="campo__dica">
+            Cada envio leva o cabeçalho <code>X-Prontuario-Assinatura</code> com o HMAC-SHA256 de
+            <code>timestamp.corpo</code>. É assim que o EMR confirma que a nota veio daqui.
+          </span>
+        </div>
+
+        <div class="acoes">
+          <button type="submit" class="botao" [disabled]="salvando()">
+            {{ salvando() ? 'Salvando…' : 'Salvar destino' }}
+          </button>
+
+          @if (configuracao()?.webhookUrl) {
+            <button type="button" class="botao botao--secundario" [disabled]="testando()"
+                    (click)="testar()">
+              {{ testando() ? 'Enviando…' : 'Enviar evento de teste' }}
+            </button>
+          }
+        </div>
+      </form>
+
+      @if (resultadoTeste(); as resultado) {
+        <p class="aviso" [class.aviso--sucesso]="resultado.sucesso" [class.aviso--erro]="!resultado.sucesso"
+           role="status">
+          @if (resultado.sucesso) {
+            O EMR de destino recebeu o evento de teste e respondeu {{ resultado.codigoHttp }}.
+          } @else {
+            {{ resultado.erro }}
+            @if (resultado.tentativas > 1) { ({{ resultado.tentativas }} tentativas) }
+          }
+        </p>
+      }
+
+      <section class="chave">
+        <h3>Chave de integração</h3>
+        <p class="secao__texto">
+          Permite que o EMR do cliente abra um atendimento por API, sem recadastrar o paciente:
+          <code>POST /api/integracao/atendimentos</code> com o cabeçalho <code>X-Api-Key</code>.
+        </p>
+
+        @if (chaveGerada(); as gerada) {
+          <div class="chave__revelada">
+            <p class="chave__aviso">
+              Copie agora: esta é a única vez que a chave aparece.
+            </p>
+            <code class="chave__valor">{{ gerada.chave }}</code>
+            <button type="button" class="botao botao--secundario" (click)="copiarChave()">
+              {{ chaveCopiada() ? 'Copiado' : 'Copiar chave' }}
+            </button>
+          </div>
+        } @else if (configuracao()?.chaveIntegracaoPrefixo) {
+          <p class="chave__atual">
+            Chave ativa <code>{{ configuracao()?.chaveIntegracaoPrefixo }}…</code>
+            @if (configuracao()?.chaveIntegracaoCriadaEm; as em) {
+              · criada em {{ em | date: "dd/MM/y 'às' HH:mm" }}
+            }
+          </p>
+        } @else {
+          <p class="chave__atual">Nenhuma chave gerada.</p>
+        }
+
+        <div class="acoes">
+          <button type="button" class="botao botao--secundario" (click)="gerarChave()">
+            {{ configuracao()?.chaveIntegracaoPrefixo ? 'Gerar nova chave' : 'Gerar chave' }}
+          </button>
+
+          @if (configuracao()?.chaveIntegracaoPrefixo) {
+            <button type="button" class="botao botao--discreto" (click)="revogarChave()">Revogar</button>
+          }
+        </div>
+      </section>
+    }
+  </div>
+</div>

@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Prontuario.Application.Common.Interfaces;
+using Prontuario.Application.Common.Models;
 using Prontuario.Domain.Entities;
 using Prontuario.Domain.Enums;
 using Prontuario.Infrastructure.Persistence;
@@ -57,7 +58,7 @@ public class ProcessamentoIAWorker : BackgroundService
         }
     }
 
-    private async Task ProcessarAsync(Guid atendimentoId, CancellationToken cancellationToken)
+    internal async Task ProcessarAsync(Guid atendimentoId, CancellationToken cancellationToken)
     {
         using var escopo = _escopos.CreateScope();
         var provedor = escopo.ServiceProvider;
@@ -66,12 +67,19 @@ public class ProcessamentoIAWorker : BackgroundService
         var atendimento = await db.Atendimentos
             .Include(a => a.GravacaoAudio)
             .Include(a => a.Medico)
+            .Include(a => a.TemplateNota)
             .SingleOrDefaultAsync(a => a.Id == atendimentoId, cancellationToken);
 
         if (atendimento?.GravacaoAudio is null)
         {
             _logger.LogWarning("Atendimento {AtendimentoId} sem gravacao; nada a processar.", atendimentoId);
             return;
+        }
+
+        if (string.IsNullOrEmpty(atendimento.GravacaoAudio.StoragePath))
+        {
+            throw new InvalidOperationException(
+                "O audio desta consulta ja foi expurgado pela politica de retencao e nao pode ser reprocessado.");
         }
 
         var configuracoes = provedor.GetRequiredService<IConfiguracaoIAService>();
@@ -83,36 +91,65 @@ public class ProcessamentoIAWorker : BackgroundService
                 "Nenhuma chave de API configurada para a clinica. Cadastre a chave em Configuracoes.");
         }
 
-        var transcricao = new Transcricao
+        // A gravacao tem uma transcricao so (indice unico): reprocessar reaproveita
+        // a que existe em vez de criar outra. O mesmo vale para o rascunho mais
+        // abaixo - o atendimento nao pode acumular versoes divergentes da IA.
+        var transcricao = await db.Transcricoes
+            .SingleOrDefaultAsync(t => t.GravacaoAudioId == atendimento.GravacaoAudio.Id, cancellationToken);
+
+        if (transcricao is null)
         {
-            GravacaoAudioId = atendimento.GravacaoAudio.Id,
-            Status = StatusProcessamento.Processando,
-        };
-        db.Transcricoes.Add(transcricao);
+            transcricao = new Transcricao { GravacaoAudioId = atendimento.GravacaoAudio.Id };
+            db.Transcricoes.Add(transcricao);
+        }
+
+        transcricao.Status = StatusProcessamento.Processando;
         await db.SaveChangesAsync(cancellationToken);
 
-        var armazenamento = provedor.GetRequiredService<IArmazenamentoAudio>();
-        var stt = provedor.GetRequiredService<ITranscriptionService>();
         var llm = provedor.GetRequiredService<IClinicalNoteGenerator>();
 
-        await using var audio = await armazenamento.AbrirAsync(atendimento.GravacaoAudio.StoragePath, cancellationToken);
-        transcricao.Texto = await stt.TranscreverAsync(audio, credenciais, cancellationToken);
+        // Consulta simulada (modo demonstracao) ja chega com o texto pronto: o
+        // que se quer mostrar e a extracao, nao a captura de audio.
+        if (atendimento.GravacaoAudio.StoragePath.StartsWith(ConsultaExemplo.PrefixoStorage, StringComparison.Ordinal))
+        {
+            transcricao.Texto = ConsultaExemplo.Transcricao;
+        }
+        else
+        {
+            var armazenamento = provedor.GetRequiredService<IArmazenamentoAudio>();
+            var stt = provedor.GetRequiredService<ITranscriptionService>();
+
+            await using var audio = await armazenamento.AbrirAsync(
+                atendimento.GravacaoAudio.StoragePath, cancellationToken);
+            transcricao.Texto = await stt.TranscreverAsync(audio, credenciais, cancellationToken);
+        }
+
         transcricao.Status = StatusProcessamento.Concluido;
         await db.SaveChangesAsync(cancellationToken);
 
-        var rascunho = await llm.GerarRascunhoAsync(transcricao.Texto, credenciais, cancellationToken);
+        // O template da especialidade e o estilo do medico moldam a redacao; o
+        // pipeline em si e o mesmo para toda consulta.
+        var contexto = new ContextoGeracao(
+            atendimento.TemplateNota?.Instrucoes, atendimento.Medico.InstrucoesEstilo);
 
-        db.RascunhosIA.Add(new RascunhoIA
+        var rascunho = await llm.GerarRascunhoAsync(transcricao.Texto, credenciais, contexto, cancellationToken);
+
+        var registro = await db.RascunhosIA
+            .SingleOrDefaultAsync(r => r.TranscricaoId == transcricao.Id, cancellationToken);
+
+        if (registro is null)
         {
-            TranscricaoId = transcricao.Id,
-            QueixaPrincipal = rascunho.QueixaPrincipal,
-            Hda = rascunho.Hda,
-            Antecedentes = rascunho.Antecedentes,
-            ExameFisico = rascunho.ExameFisico,
-            HipoteseDiagnostica = rascunho.HipoteseDiagnostica,
-            Cid10Sugerido = rascunho.Cid10Sugerido,
-            Conduta = rascunho.Conduta,
-        });
+            registro = new RascunhoIA { TranscricaoId = transcricao.Id };
+            db.RascunhosIA.Add(registro);
+        }
+
+        registro.QueixaPrincipal = rascunho.QueixaPrincipal;
+        registro.Hda = rascunho.Hda;
+        registro.Antecedentes = rascunho.Antecedentes;
+        registro.ExameFisico = rascunho.ExameFisico;
+        registro.HipoteseDiagnostica = rascunho.HipoteseDiagnostica;
+        registro.Cid10Sugerido = rascunho.Cid10Sugerido;
+        registro.Conduta = rascunho.Conduta;
 
         atendimento.Status = StatusAtendimento.EmRevisao;
         atendimento.ErroProcessamentoIA = null;

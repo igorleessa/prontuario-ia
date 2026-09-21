@@ -33,10 +33,44 @@ export interface AtendimentoDetalhe {
   consentimentoGravacao: boolean;
   consentimentoEm: string | null;
   rascunho: RascunhoClinico;
+  /** Sugestão original da IA, preservada mesmo depois das edições do médico. */
+  sugestaoIa: RascunhoClinico | null;
   /** Texto que o STT extraiu do áudio; null enquanto não houver gravação processada. */
   transcricao: string | null;
   /** Motivo da falha do pipeline de IA, quando houve uma. */
   erroProcessamentoIA: string | null;
+  /** Modelo de especialidade usado na extração; null quando foi o genérico. */
+  templateNome: string | null;
+  duracaoGravacaoSegundos: number | null;
+}
+
+/** Espelha MetricasClinicaDto. O tempo economizado é estimativa declarada. */
+export interface MetricasClinica {
+  atendimentosFinalizados: number;
+  minutosDeConsultaDocumentados: number;
+  tempoMedioRevisaoSegundos: number | null;
+  minutosDocumentacaoManualEstimados: number;
+  economiaPercentualEstimada: number | null;
+}
+
+/** Espelha HistoricoPacienteDto (RF16). */
+export interface HistoricoPaciente {
+  pacienteId: string;
+  pacienteNome: string;
+  cpf: string | null;
+  dataNascimento: string | null;
+  idExternoEmr: string | null;
+  atendimentos: HistoricoAtendimento[];
+}
+
+export interface HistoricoAtendimento {
+  id: string;
+  dataHora: string;
+  status: StatusAtendimento;
+  medicoNome: string;
+  queixaPrincipal: string | null;
+  hipoteseDiagnostica: string | null;
+  finalizado: boolean;
 }
 
 export const ROTULO_STATUS: Record<StatusAtendimento, string> = {

@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard } from './core/guards/auth.guard';
+import { adminGuard, authGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'atendimentos' },
@@ -26,8 +26,27 @@ export const routes: Routes = [
       import('./features/atendimento/atendimento.component').then((m) => m.AtendimentoComponent),
   },
   {
-    path: 'configuracoes',
+    path: 'pacientes/:id',
     canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/pacientes/historico/historico-paciente.component').then(
+        (m) => m.HistoricoPacienteComponent,
+      ),
+  },
+  {
+    path: 'perfil',
+    canActivate: [authGuard],
+    loadComponent: () => import('./features/perfil/perfil.component').then((m) => m.PerfilComponent),
+  },
+  {
+    path: 'auditoria',
+    canActivate: [authGuard, adminGuard],
+    loadComponent: () =>
+      import('./features/auditoria/auditoria.component').then((m) => m.AuditoriaComponent),
+  },
+  {
+    path: 'configuracoes',
+    canActivate: [authGuard, adminGuard],
     loadComponent: () =>
       import('./features/configuracoes/configuracao-ia.component').then((m) => m.ConfiguracaoIAComponent),
   },

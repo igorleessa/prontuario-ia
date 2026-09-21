@@ -19,6 +19,14 @@ public class PacientesController : ApiControllerBase
         [FromQuery] string? busca, CancellationToken cancellationToken)
         => Ok(await _pacientes.ListarAsync(ClinicaId, busca, cancellationToken));
 
+    /// <summary>Linha do tempo de atendimentos do paciente (RF16).</summary>
+    [HttpGet("{id:guid}/historico")]
+    public async Task<ActionResult<HistoricoPacienteDto>> Historico(Guid id, CancellationToken cancellationToken)
+    {
+        var historico = await _pacientes.ObterHistoricoAsync(id, ClinicaId, cancellationToken);
+        return historico is null ? NotFound() : Ok(historico);
+    }
+
     [HttpPost]
     public async Task<ActionResult<PacienteResumoDto>> Criar(NovoPacienteDto novo, CancellationToken cancellationToken)
     {

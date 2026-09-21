@@ -115,6 +115,7 @@ if [[ "$PULAR_PERGUNTAS" == false ]]; then
   SEED_SENHA=$(perguntar_senha "Senha do médico")
   SEED_NOME_MEDICO=$(perguntar "Nome do médico" "Medico de Teste")
   SEED_NOME_CLINICA=$(perguntar "Nome da clínica" "Clinica de Teste")
+  SEED_EMAIL_ADMIN=$(perguntar "E-mail do administrador (configura a clínica)" "admin@local.test")
 
   echo
   info "=== Modalidade de operação da clínica ==="
@@ -135,6 +136,9 @@ if [[ "$PULAR_PERGUNTAS" == false ]]; then
   MINIO_USER=$(perguntar "Usuário do MinIO (storage de áudio)" "prontuario")
   # O MinIO se recusa a iniciar com senha de menos de 8 caracteres.
   MINIO_PASSWORD=$(perguntar_senha "Senha do MinIO (mínimo 8 caracteres)" 8)
+
+  # Segredo do webhook usado pelo EMR de demonstracao para conferir a assinatura.
+  EMR_DEMO_SECRET=$(gerar_chave | tr -cd 'A-Za-z0-9' | head -c 32)
 
   info "Gerando chave JWT aleatória…"
   JWT_KEY=$(gerar_chave)
@@ -159,6 +163,10 @@ SEED_EMAIL=$SEED_EMAIL
 SEED_SENHA=$SEED_SENHA
 SEED_NOME_MEDICO=$SEED_NOME_MEDICO
 SEED_NOME_CLINICA=$SEED_NOME_CLINICA
+# As telas de configuracao exigem o papel de administrador; o login de medico
+# nao mexe em credenciais nem no destino de exportacao da clinica.
+SEED_EMAIL_ADMIN=$SEED_EMAIL_ADMIN
+SEED_NOME_ADMIN=Administrador da Clinica
 SEED_MODO_OPERACAO=$SEED_MODO_OPERACAO
 
 MINIO_USER=$MINIO_USER
@@ -166,8 +174,23 @@ MINIO_PASSWORD=$MINIO_PASSWORD
 MINIO_PORT=9000
 MINIO_CONSOLE_PORT=9001
 
+# Dias que o audio bruto fica guardado depois de transcrito (LGPD).
+AUDIO_RETENCAO_DIAS=30
+
+# Botao "Simular consulta" na tela do atendimento (demonstracao ao cliente).
+DEMONSTRACAO_HABILITADA=true
+
+# Linha de base de documentacao manual usada no calculo de tempo economizado.
+MINUTOS_DOCUMENTACAO_MANUAL=7
+
 BACKEND_PORT=$BACKEND_PORT
 FRONTEND_PORT=$FRONTEND_PORT
+
+# EMR ficticio da demonstracao: recebe a nota pelo webhook e a exibe como se
+# fosse o prontuario do cliente. O segredo e o mesmo que se cadastra na tela
+# de Configuracoes > Exportacao para o EMR.
+EMR_DEMO_PORT=9080
+EMR_DEMO_SECRET=$EMR_DEMO_SECRET
 EOF
   chmod 600 "$ENV_FILE"
   ok ".env criado em $ENV_FILE (permissão 600)."
@@ -180,8 +203,11 @@ ler_env() { grep -E "^$1=" "$ENV_FILE" | head -n1 | cut -d= -f2-; }
 BACKEND_PORT=$(ler_env BACKEND_PORT)
 FRONTEND_PORT=$(ler_env FRONTEND_PORT)
 MINIO_CONSOLE_PORT=$(ler_env MINIO_CONSOLE_PORT)
+EMR_DEMO_PORT=$(ler_env EMR_DEMO_PORT)
+EMR_DEMO_SECRET=$(ler_env EMR_DEMO_SECRET)
 SEED_EMAIL=$(ler_env SEED_EMAIL)
 SEED_MODO_OPERACAO=$(ler_env SEED_MODO_OPERACAO)
+SEED_EMAIL_ADMIN=$(ler_env SEED_EMAIL_ADMIN)
 
 # ----------------------------------------------------------------- subir ------
 cd "$RAIZ"
@@ -210,8 +236,14 @@ if [[ "${API_OK:-false}" == true ]]; then
   echo "  Frontend:       http://localhost:${FRONTEND_PORT}"
   echo "  API (Swagger):  http://localhost:${BACKEND_PORT}/swagger"
   echo "  MinIO console:  http://localhost:${MINIO_CONSOLE_PORT}"
+  echo "  EMR de demo:    http://localhost:${EMR_DEMO_PORT}"
   echo
-  echo "  Login:          ${SEED_EMAIL}"
+  echo "  Para demonstrar a modalidade Conector, cadastre em Configuracoes:"
+  echo "    Webhook:      http://emr-demo:8080/webhook"
+  echo "    Segredo:      ${EMR_DEMO_SECRET}"
+  echo
+  echo "  Login médico:   ${SEED_EMAIL}"
+  echo "  Login admin:    ${SEED_EMAIL_ADMIN} (mesma senha; configura a clínica)"
   echo "  Modalidade:     ${SEED_MODO_OPERACAO}"
   echo
   echo "  Logs:           docker compose logs -f"

@@ -5,6 +5,7 @@ import { RouterLink } from '@angular/router';
 import {
   AtendimentoResumo,
   CLASSE_STATUS,
+  MetricasClinica,
   ROTULO_STATUS,
   StatusAtendimento,
 } from '../../../core/models/atendimento.model';
@@ -34,6 +35,19 @@ export class AtendimentosComponent {
   readonly lista = signal<AtendimentoResumo[]>([]);
   readonly aba = signal<Aba>('emAndamento');
   readonly busca = signal('');
+  readonly metricas = signal<MetricasClinica | null>(null);
+
+  /** "2m14s" - formato curto, que cabe no cartao sem quebrar. */
+  readonly tempoMedioFormatado = computed(() => {
+    const segundos = this.metricas()?.tempoMedioRevisaoSegundos;
+    if (segundos == null) {
+      return null;
+    }
+
+    const minutos = Math.floor(segundos / 60);
+    const resto = segundos % 60;
+    return minutos > 0 ? `${minutos}m${resto.toString().padStart(2, '0')}s` : `${resto}s`;
+  });
 
   readonly rotuloStatus = ROTULO_STATUS;
   readonly classeStatus = CLASSE_STATUS;
@@ -63,6 +77,11 @@ export class AtendimentosComponent {
 
   constructor() {
     this.carregar();
+
+    // Metricas sao informativas: se falharem, a lista de atendimentos continua.
+    this.atendimentos.metricas().subscribe({
+      next: (metricas) => this.metricas.set(metricas),
+    });
   }
 
   carregar(): void {

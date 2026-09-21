@@ -1,0 +1,114 @@
+.secao__texto {
+  margin-top: 0.375rem;
+  color: var(--texto-suave);
+  font-size: 0.875rem;
+}
+
+.estado {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie-2);
+
+  strong {
+    display: block;
+    font-size: 0.9375rem;
+    font-weight: 580;
+  }
+
+  small {
+    font-size: 0.8125rem;
+    color: var(--texto-tenue);
+    overflow-wrap: anywhere;
+  }
+}
+
+.estado__ponto {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--texto-tenue);
+}
+
+.estado--ativo {
+  border-color: color-mix(in srgb, var(--sucesso) 35%, transparent);
+  background: var(--sucesso-suave);
+
+  strong { color: var(--sucesso); }
+
+  .estado__ponto { background: var(--sucesso); }
+}
+
+.alerta-inline { color: var(--perigo); }
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+}
+
+.acoes {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+code {
+  font-family: var(--fonte-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.8125em;
+  padding: 0.0625rem 0.25rem;
+  border-radius: 0.25rem;
+  background: var(--superficie-2);
+}
+
+.chave {
+  margin-top: 1.75rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--borda);
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+
+  h3 {
+    font-size: 0.9375rem;
+    font-weight: 600;
+  }
+}
+
+.chave__atual {
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+.chave__revelada {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, var(--sucesso) 35%, transparent);
+  border-radius: var(--raio);
+  background: var(--sucesso-suave);
+  align-items: flex-start;
+}
+
+.chave__aviso {
+  font-size: 0.8125rem;
+  font-weight: 560;
+  color: var(--sucesso);
+}
+
+.chave__valor {
+  display: block;
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}

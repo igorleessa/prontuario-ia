@@ -13,6 +13,12 @@ public class ArmazenamentoAudioOptions
     public string AccessKey { get; set; } = string.Empty;
     public string SecretKey { get; set; } = string.Empty;
     public string Bucket { get; set; } = "consultas";
+
+    /// <summary>
+    /// Dias que o audio bruto fica guardado depois de transcrito (LGPD:
+    /// minimizacao). Zero desliga o expurgo e mantem o audio indefinidamente.
+    /// </summary>
+    public int RetencaoDias { get; set; }
 }
 
 /// <summary>
@@ -71,6 +77,9 @@ public class ArmazenamentoAudioMinio : IArmazenamentoAudio
         memoria.Position = 0;
         return memoria;
     }
+
+    public Task RemoverAsync(string chave, CancellationToken cancellationToken = default)
+        => _s3.DeleteObjectAsync(_opcoes.Bucket, chave, cancellationToken);
 
     private async Task GarantirBucketAsync(CancellationToken cancellationToken)
     {

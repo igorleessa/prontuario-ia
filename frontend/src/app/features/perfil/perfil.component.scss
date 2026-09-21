@@ -1,0 +1,81 @@
+.pagina {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-width: 42rem;
+}
+
+.voltar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  align-self: flex-start;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+.voltar:hover { color: var(--texto); }
+
+.pagina__subtitulo {
+  margin-top: 0.25rem;
+  color: var(--texto-suave);
+  font-size: 0.875rem;
+}
+
+.identificacao {
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie-2);
+
+  strong {
+    display: block;
+    font-size: 0.9375rem;
+    font-weight: 580;
+  }
+
+  small {
+    font-size: 0.8125rem;
+    color: var(--texto-tenue);
+  }
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+}
+
+.exemplos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.exemplos__rotulo {
+  font-size: 0.8125rem;
+  color: var(--texto-tenue);
+}
+
+.exemplo {
+  padding: 0.3125rem 0.625rem;
+  border: 1px dashed var(--borda);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--texto-suave);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.exemplo:hover {
+  border-style: solid;
+  color: var(--texto);
+}
+
+.acoes {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}

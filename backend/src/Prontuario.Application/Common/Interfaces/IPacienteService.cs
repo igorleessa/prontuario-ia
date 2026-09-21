@@ -10,4 +10,8 @@ public interface IPacienteService
 
     Task<PacienteResumoDto> CriarAsync(
         Guid clinicaId, NovoPacienteDto novo, CancellationToken cancellationToken = default);
+
+    /// <summary>Linha do tempo de atendimentos do paciente, do mais recente para o mais antigo (RF16).</summary>
+    Task<HistoricoPacienteDto?> ObterHistoricoAsync(
+        Guid pacienteId, Guid clinicaId, CancellationToken cancellationToken = default);
 }

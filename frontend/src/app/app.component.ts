@@ -15,6 +15,7 @@ export class AppComponent {
 
   readonly autenticado = this.auth.autenticado;
   readonly usuario = this.auth.usuario;
+  readonly administrador = this.auth.administrador;
 
   /** Iniciais do medico para o avatar do cabecalho. */
   readonly iniciais = computed(() => {
