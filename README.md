@@ -19,10 +19,6 @@ revisão) atende dois modelos de negócio, escolhidos por configuração da clí
 | Saída da revisão | Prontuário nativo, assinado e travado | Nota enviada por webhook assinado, PDF ou cópia |
 | Para quem | Consultório sem EMR | Clínica com EMR consolidado que só quer a camada de IA |
 
-A modalidade Conector é o mesmo posicionamento de [TuriSaúde](https://turisaude.com.br/)
-e [Voa Health](https://voa.health/) — com a diferença de que aqui a nota chega ao
-sistema de destino por integração, não por cópia manual.
-
 ## O que o sistema faz hoje
 
 **Núcleo clínico**
