@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Prontuario.Application.Common.Interfaces;
 using Prontuario.Application.Common.Models;
 
@@ -11,21 +12,54 @@ namespace Prontuario.Infrastructure.Services;
 /// Outputs (response_format json_schema, strict) para que a resposta sempre
 /// chegue com exatamente os campos do formulario de revisao.
 /// </summary>
-public class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
+public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
 {
     private const string Instrucao = """
         Voce e um assistente de documentacao clinica. A partir da transcricao de uma
         consulta medica em portugues do Brasil, preencha os campos do prontuario.
+
+        Sobre a transcricao:
+        - Ela vem de reconhecimento automatico de fala e, em geral, sem marcar quem fala.
+          Deduza pelo contexto o que e fala do medico (perguntas, achados do exame,
+          raciocinio, prescricao) e o que e relato do paciente ou acompanhante.
+        - Pode conter erros foneticos. Corrija a grafia de medicamentos, exames e termos
+          tecnicos apenas quando a correcao for inequivoca (ex.: "lozartana" -> losartana).
+          Na duvida, mantenha o que foi transcrito.
 
         Regras obrigatorias:
         - Use exclusivamente informacao presente na transcricao. Nunca invente sintomas,
           medicamentos, doses, resultados de exame ou diagnosticos.
         - Se um campo nao tiver respaldo na transcricao, devolva null. Campo vazio e
           preferivel a campo especulativo: o medico revisa e completa.
+        - Registre negativas pertinentes que foram ditas (ex.: "nega febre", "sem dispneia"):
+          elas sao parte do raciocinio clinico.
+        - Preserve exatamente numeros, doses, unidades, frequencias, duracoes e sinais vitais,
+          escritos em algarismos e com a unidade usual (ex.: "dipirona 500 mg, 1 comprimido de
+          6/6 h se dor ou febre", "PA 130x80 mmHg", "Tax 37,2 °C", "SpO2 97%").
+        - Hipotese do paciente ("acho que e sinusite") nao e diagnostico: so registre como
+          hipotese diagnostica o que o medico formulou.
+        - Nao repita a mesma informacao em mais de um campo; coloque-a no campo mais especifico.
         - Escreva em portugues do Brasil, em terceira pessoa, no registro tecnico usado
-          em prontuario, sem repetir o dialogo literalmente.
-        - cid10Sugerido e apenas uma sugestao a partir da hipotese diagnostica descrita.
-          Devolva null se a transcricao nao sustentar um codigo com seguranca.
+          em prontuario, de forma concisa, sem repetir o dialogo literalmente.
+
+        O que vai em cada campo:
+        - queixaPrincipal: o motivo da consulta em uma frase curta, com a duracao quando dita
+          (ex.: "Tosse e dor de garganta ha 4 dias.").
+        - hda: historia da doenca atual em ordem cronologica - inicio, caracteristicas,
+          intensidade, fatores de melhora e piora, sintomas associados, negativas pertinentes
+          e o que ja foi feito ou tomado para o quadro.
+        - antecedentes: doencas previas e cronicas, medicamentos de uso continuo com dose,
+          alergias (inclusive "nega alergias" quando dito), cirurgias, internacoes, historia
+          familiar e habitos (tabagismo, etilismo, atividade fisica).
+        - exameFisico: sinais vitais e achados do exame que o medico verbalizou, por sistema.
+          Nunca preencha exame que nao foi descrito na consulta.
+        - hipoteseDiagnostica: a(s) hipotese(s) formulada(s) pelo medico, a principal primeiro.
+        - cid10Sugerido: somente o codigo CID-10 da hipotese principal, no formato letra,
+          dois digitos e subcategoria opcional (ex.: "J06.9"), sem descricao. null se a
+          hipotese nao sustentar um codigo com seguranca.
+        - conduta: o plano, em itens separados por quebra de linha: prescricoes (medicamento,
+          dose, via, posologia, duracao), exames solicitados, orientacoes, sinais de alarme,
+          atestado, encaminhamentos e retorno.
         """;
 
     private static readonly JsonSerializerOptions OpcoesJson = new(JsonSerializerDefaults.Web);
@@ -47,7 +81,7 @@ public class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
             messages = new object[]
             {
                 new { role = "system", content = ComContexto(Instrucao, contexto) },
-                new { role = "user", content = $"Transcricao da consulta:\n\n{transcricao}" },
+                new { role = "user", content = $"Transcricao da consulta:\n\n<transcricao>\n{transcricao}\n</transcricao>" },
             },
             response_format = new
             {
@@ -89,9 +123,55 @@ public class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
             throw new InvalidOperationException("A API de texto devolveu uma resposta vazia.");
         }
 
-        return JsonSerializer.Deserialize<RascunhoClinicoDto>(conteudo, OpcoesJson)
+        var rascunho = JsonSerializer.Deserialize<RascunhoClinicoDto>(conteudo, OpcoesJson)
             ?? throw new InvalidOperationException("Nao foi possivel interpretar o rascunho devolvido pela IA.");
+
+        return Normalizar(rascunho);
     }
+
+    /// <summary>
+    /// Limpa o que o modelo devolve antes de chegar a tela: texto em branco vira
+    /// null (o campo aparece vazio para o medico preencher) e o CID e reduzido ao
+    /// codigo, para que "J06.9 - IVAS" ou "j069" nao entrem no prontuario como estao.
+    /// </summary>
+    internal static RascunhoClinicoDto Normalizar(RascunhoClinicoDto rascunho) => new(
+        Limpar(rascunho.QueixaPrincipal),
+        Limpar(rascunho.Hda),
+        Limpar(rascunho.Antecedentes),
+        Limpar(rascunho.ExameFisico),
+        Limpar(rascunho.HipoteseDiagnostica),
+        NormalizarCid(rascunho.Cid10Sugerido),
+        Limpar(rascunho.Conduta));
+
+    private static string? Limpar(string? texto)
+    {
+        var limpo = texto?.Trim();
+        return string.IsNullOrEmpty(limpo) || limpo.Equals("null", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : limpo;
+    }
+
+    internal static string? NormalizarCid(string? cid)
+    {
+        if (string.IsNullOrWhiteSpace(cid))
+        {
+            return null;
+        }
+
+        var achado = CodigoCid().Match(cid.ToUpperInvariant());
+        if (!achado.Success)
+        {
+            return null;
+        }
+
+        var subcategoria = achado.Groups[3].Value;
+        return subcategoria.Length > 0
+            ? $"{achado.Groups[1].Value}{achado.Groups[2].Value}.{subcategoria}"
+            : $"{achado.Groups[1].Value}{achado.Groups[2].Value}";
+    }
+
+    [GeneratedRegex(@"\b([A-Z])(\d{2})(?:\.?(\d{1,2}))?\b")]
+    private static partial Regex CodigoCid();
 
     public async Task<string> GerarDocumentoAsync(
         string tipo,
@@ -215,23 +295,30 @@ public class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
     /// <summary>
     /// Structured Outputs exige todos os campos em "required"; a ausencia de
     /// informacao e expressa por null, o que o tipo ["string","null"] permite.
+    /// A descricao de cada campo vai junto no esquema e reforca, campo a campo,
+    /// o que a instrucao diz - e o que mais reduz informacao no campo errado.
     /// </summary>
     private static object Esquema()
     {
-        string[] campos =
-        [
-            "queixaPrincipal", "hda", "antecedentes", "exameFisico",
-            "hipoteseDiagnostica", "cid10Sugerido", "conduta",
-        ];
+        var campos = new Dictionary<string, string>
+        {
+            ["queixaPrincipal"] = "Motivo da consulta em uma frase, com duracao quando dita.",
+            ["hda"] = "Historia da doenca atual, cronologica, com sintomas associados e negativas pertinentes.",
+            ["antecedentes"] = "Comorbidades, medicamentos de uso continuo com dose, alergias, cirurgias, historia familiar e habitos.",
+            ["exameFisico"] = "Sinais vitais e achados verbalizados pelo medico. null se nao houve exame descrito.",
+            ["hipoteseDiagnostica"] = "Hipoteses formuladas pelo medico, a principal primeiro.",
+            ["cid10Sugerido"] = "Apenas o codigo CID-10 da hipotese principal, ex.: J06.9. null se incerto.",
+            ["conduta"] = "Prescricoes, exames, orientacoes, sinais de alarme, atestado, encaminhamento e retorno, um item por linha.",
+        };
 
         return new
         {
             type = "object",
             additionalProperties = false,
-            required = campos,
+            required = campos.Keys.ToArray(),
             properties = campos.ToDictionary(
-                campo => campo,
-                _ => (object)new { type = new[] { "string", "null" } }),
+                campo => campo.Key,
+                campo => (object)new { type = new[] { "string", "null" }, description = campo.Value }),
         };
     }
 }

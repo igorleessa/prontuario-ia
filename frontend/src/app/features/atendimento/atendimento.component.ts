@@ -69,6 +69,12 @@ export class AtendimentoComponent {
   readonly demonstracao = this.configuracaoApp.demonstracao;
 
   readonly gravando = this.gravacaoAudio.gravando;
+  readonly nivelAudio = this.gravacaoAudio.nivel;
+  readonly nivelPercentual = computed(() => Math.round(this.nivelAudio() * 100));
+
+  /** Segundos seguidos sem som captado: microfone mudo ou desligado no meio da consulta. */
+  readonly segundosEmSilencio = signal(0);
+  readonly microfoneMudo = computed(() => this.segundosEmSilencio() >= 8);
   readonly rotuloStatus = ROTULO_STATUS;
   readonly classeStatus = CLASSE_STATUS;
 
@@ -140,6 +146,7 @@ export class AtendimentoComponent {
     inject(DestroyRef).onDestroy(() => {
       this.pararCronometro();
       this.pararConsulta();
+      this.gravacaoAudio.descartar();
     });
   }
 
@@ -211,7 +218,11 @@ export class AtendimentoComponent {
     try {
       await this.gravacaoAudio.iniciar();
       this.segundosGravados.set(0);
-      this.cronometro = setInterval(() => this.segundosGravados.update((s) => s + 1), 1000);
+      this.segundosEmSilencio.set(0);
+      this.cronometro = setInterval(() => {
+        this.segundosGravados.update((s) => s + 1);
+        this.segundosEmSilencio.update((s) => (this.nivelAudio() < 0.04 ? s + 1 : 0));
+      }, 1000);
     } catch {
       this.erro.set('Não foi possível acessar o microfone. Verifique a permissão do navegador.');
     }
@@ -225,7 +236,7 @@ export class AtendimentoComponent {
     this.enviandoAudio.set(true);
     this.erro.set(null);
 
-    this.atendimentos.enviarAudio(this.id(), audio, duracao).subscribe({
+    this.atendimentos.enviarAudio(this.id(), audio.blob, audio.extensao, duracao).subscribe({
       next: () => {
         this.enviandoAudio.set(false);
         this.atualizarStatus('ProcessandoIA');
