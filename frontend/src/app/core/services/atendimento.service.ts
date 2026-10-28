@@ -24,9 +24,14 @@ export class AtendimentoService {
   }
 
   /** Envia o audio da consulta e dispara a transcricao e a extracao (RF06/RF07/RF08). */
-  enviarAudio(atendimentoId: string, audio: Blob, duracaoSegundos: number): Observable<void> {
+  enviarAudio(
+    atendimentoId: string,
+    audio: Blob,
+    extensao: string,
+    duracaoSegundos: number,
+  ): Observable<void> {
     const corpo = new FormData();
-    corpo.append('audio', audio, 'consulta.webm');
+    corpo.append('audio', audio, `consulta.${extensao}`);
     corpo.append('duracaoSegundos', String(duracaoSegundos));
 
     return this.http.post<void>(`${this.baseUrl}/${atendimentoId}/audio`, corpo);

@@ -91,7 +91,23 @@
                   <strong>Gravando</strong>
                   <span class="gravador__tempo">{{ tempoGravado() }}</span>
                 </div>
+                <div class="gravador__nivel" role="meter" aria-label="Volume captado pelo microfone"
+                     aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="nivelPercentual()">
+                  <span class="gravador__nivel-barra" [style.transform]="'scaleX(' + nivelAudio() + ')'"></span>
+                </div>
               </div>
+
+              @if (microfoneMudo()) {
+                <p class="gravador__alerta" role="status">
+                  Nenhum som captado nos últimos segundos. Confira se o microfone está ligado e
+                  próximo de quem fala.
+                </p>
+              } @else {
+                <p class="acoes__nota">
+                  Para uma transcrição mais precisa, deixe o microfone entre médico e paciente e
+                  verbalize os achados do exame físico e a prescrição.
+                </p>
+              }
 
               <div class="acoes">
                 <button type="button" class="botao botao--perigo" [disabled]="enviandoAudio()"
