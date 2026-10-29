@@ -37,6 +37,7 @@ public class TrechoTranscricaoConfiguration : IEntityTypeConfiguration<TrechoTra
         // A sequencia identifica o trecho: reenvio substitui, nao duplica.
         builder.HasIndex(t => new { t.TranscricaoId, t.Sequencia }).IsUnique();
         builder.Property(t => t.Texto).IsRequired();
+        builder.Property(t => t.Falante).HasConversion<string>().HasMaxLength(20);
     }
 }
 

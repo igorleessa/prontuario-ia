@@ -67,3 +67,20 @@ public class OrigensRascunhoTests
     public void LerOrigens_SemOrigens_DevolveVazio()
         => Assert.Empty(Prontuario.Infrastructure.Services.OpenAiClinicalNoteGenerator.LerOrigens("""{"hda":null}"""));
 }
+
+public class FalantesRascunhoTests
+{
+    [Fact]
+    public void LerFalantes_NormalizaEIgnoraOQueNaoEhFalanteConhecido()
+    {
+        const string resposta = """
+            {"falantes":[{"trecho":0,"falante":"medico"},{"trecho":1,"falante":"PACIENTE"},{"trecho":2,"falante":"enfermeira"},{"trecho":"x","falante":"medico"}]}
+            """;
+
+        var falantes = Prontuario.Infrastructure.Services.OpenAiClinicalNoteGenerator.LerFalantes(resposta);
+
+        Assert.Equal("Medico", falantes[0]);
+        Assert.Equal("Paciente", falantes[1]);
+        Assert.Equal(2, falantes.Count);
+    }
+}

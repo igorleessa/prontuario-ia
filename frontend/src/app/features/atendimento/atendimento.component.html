@@ -294,9 +294,18 @@
                   (mouseup)="capturarSelecao()" (keyup)="capturarSelecao()">
                 @for (trecho of trechos(); track trecho.sequencia) {
                   <li class="trecho" [id]="'trecho-' + trecho.sequencia"
+                      [attr.data-falante]="trecho.falante"
                       [class.trecho--pendente]="trecho.estado === 'transcrevendo'"
                       [class.trecho--origem]="trechosDestacados().has(trecho.sequencia)"
                       [class.trecho--falhou]="trecho.estado === 'falhou'">
+                    @if (trecho.estado === 'pronto') {
+                      <button type="button" class="trecho__falante" (click)="trocarFalante(trecho)"
+                              [disabled]="etapa() === 'encerrado'"
+                              [title]="trecho.falanteConfirmado ? 'Definido por você — clique para trocar' : 'Sugerido pela IA — clique para corrigir'">
+                        {{ rotuloFalante[trecho.falante] }}
+                        @if (trecho.falanteConfirmado) { <app-icone nome="check" [tamanho]="11" [traco]="3" /> }
+                      </button>
+                    }
                     @switch (trecho.estado) {
                       @case ('transcrevendo') {
                         @if (trecho.texto) { {{ trecho.texto }} }

@@ -59,6 +59,12 @@ public class TranscricaoController : ApiControllerBase
     public async Task<IActionResult> ProtegerTermo(Guid id, ProtegerTermoDto pedido, CancellationToken cancellationToken)
         => Responder(await _transcricao.ProtegerTermoAsync(id, ClinicaId, pedido.Termo, cancellationToken));
 
+    /// <summary>O medico corrigiu quem disse o trecho.</summary>
+    [HttpPut("trechos/{sequencia:int}/falante")]
+    public async Task<IActionResult> DefinirFalante(
+        Guid id, int sequencia, DefinirFalanteDto pedido, CancellationToken cancellationToken)
+        => Responder(await _transcricao.DefinirFalanteAsync(id, ClinicaId, sequencia, pedido.Falante, cancellationToken));
+
     [HttpPost("encerrar")]
     public async Task<IActionResult> Encerrar(Guid id, EncerrarRequest request, CancellationToken cancellationToken)
         => await _transcricao.EncerrarAsync(id, ClinicaId, request.DuracaoSegundos, cancellationToken) switch

@@ -33,6 +33,11 @@ dos campos → revisão) atende dois modelos de negócio, escolhidos por configu
 - **Origem de cada campo**: a IA indica de quais falas tirou o conteúdo, e o
   médico vê esses trechos destacados na transcrição com um clique. Citação para
   trecho que não existe é descartada.
+- **Quem fala**: a transcrição aparece como diálogo (médico, paciente,
+  acompanhante). Sem áudio no servidor não há como separar vozes, então a IA
+  atribui cada trecho pelo conteúdo, na mesma chamada que preenche o prontuário.
+  O médico corrige com um clique, e a correção dele vale sobre a da IA e volta
+  para ela nas chamadas seguintes e na redação dos documentos.
 - **Dois modelos**: um rápido e barato refaz o rascunho durante a consulta
   (padrão `gpt-4o-mini`); o completo faz a passada final ao encerrar.
 - Tela de revisão campo a campo, com etiqueta no que veio da IA e no que o médico
@@ -94,8 +99,8 @@ dos campos → revisão) atende dois modelos de negócio, escolhidos por configu
   guardada como hash.
 - Nenhum áudio é armazenado em lugar algum: não há storage de arquivos.
 
-**Ainda não implementado**: assinatura digital ICP-Brasil, identificação de quem
-fala na transcrição,
+**Ainda não implementado**: assinatura digital ICP-Brasil, separação de vozes pelo
+áudio (a atribuição de quem fala é pelo conteúdo),
 agenda, faturamento e TISS.
 
 ## Stack

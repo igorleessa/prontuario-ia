@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { RascunhoComOrigens } from '../models/rascunho-clinico.model';
-import { SessaoTranscricao, TranscricaoAtualizada, TrechoRegistrado } from '../models/transcricao.model';
+import { Falante, SessaoTranscricao, TranscricaoAtualizada, TrechoRegistrado } from '../models/transcricao.model';
 
 /**
  * Rotas da consulta transcrita ao vivo. Nenhuma recebe a gravação da consulta:
@@ -53,6 +53,14 @@ export class TranscricaoService {
       `${this.baseUrl}/${atendimentoId}/transcricao/rascunho`,
       {},
       { params: { final } },
+    );
+  }
+
+  /** O médico corrigiu quem disse o trecho. "Indefinido" devolve a decisão à IA. */
+  definirFalante(atendimentoId: string, sequencia: number, falante: Falante): Observable<TrechoRegistrado> {
+    return this.http.put<TrechoRegistrado>(
+      `${this.baseUrl}/${atendimentoId}/transcricao/trechos/${sequencia}/falante`,
+      { falante },
     );
   }
 

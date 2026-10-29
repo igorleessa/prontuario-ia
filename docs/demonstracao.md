@@ -64,6 +64,11 @@ Aponte duas coisas enquanto a consulta acontece:
 Edite um campo no meio da consulta: o texto do médico não é sobrescrito, e a
 novidade da IA aparece como sugestão para aceitar ou não.
 
+A transcrição aparece como diálogo. Clique no rótulo de um trecho (**Médico**,
+**Paciente**) para corrigir quem falou: *"a IA deduz pelo conteúdo, o médico tem
+a palavra final — e ela deixa de confundir a opinião do paciente com a hipótese do
+médico."*
+
 Clique em **origem** ao lado de um campo: os trechos da conversa de onde a IA
 tirou aquele conteúdo ficam destacados. *"O médico não precisa confiar na IA —
 ele confere na própria fala."*
@@ -125,6 +130,6 @@ clínico exposto.
 ## O que não prometer
 
 - Assinatura digital ICP-Brasil: não está implementada.
-- Identificação de quem fala (médico ou paciente) na transcrição: a IA deduz pelo contexto.
+- Separação de vozes pelo áudio: quem fala é atribuído pelo conteúdo da fala, e o médico corrige quando a IA erra.
 - Anonimização total: dado pseudonimizado continua sendo dado pessoal pela LGPD.
 - Agenda, faturamento e TISS: fora do escopo, por decisão de produto.

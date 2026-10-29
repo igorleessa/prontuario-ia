@@ -45,6 +45,13 @@ public interface ITranscricaoConsultaService
     Task<ResultadoOperacao<TranscricaoAtualizadaDto>> ProtegerTermoAsync(
         Guid atendimentoId, Guid clinicaId, string termo, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// O medico definiu quem disse o trecho. Vale sobre a atribuicao da IA, que
+    /// nao muda mais esse trecho; "Indefinido" devolve a decisao a IA.
+    /// </summary>
+    Task<ResultadoOperacao<TrechoRegistradoDto>> DefinirFalanteAsync(
+        Guid atendimentoId, Guid clinicaId, int sequencia, string falante, CancellationToken cancellationToken = default);
+
     /// <summary>Fecha a escuta e leva o atendimento a revisao do medico.</summary>
     Task<ResultadoAtendimento> EncerrarAsync(
         Guid atendimentoId, Guid clinicaId, int duracaoSegundos, CancellationToken cancellationToken = default);

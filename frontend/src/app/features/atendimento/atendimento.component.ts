@@ -7,7 +7,7 @@ import { firstValueFrom } from 'rxjs';
 import { AtendimentoDetalhe, CLASSE_STATUS, ROTULO_STATUS } from '../../core/models/atendimento.model';
 import { NotaExportavel, ResultadoExportacao } from '../../core/models/exportacao.model';
 import { OrigensRascunho, RascunhoClinico } from '../../core/models/rascunho-clinico.model';
-import { ModoTranscricao } from '../../core/models/transcricao.model';
+import { Falante, ModoTranscricao, TrechoRegistrado } from '../../core/models/transcricao.model';
 import { AppConfigService } from '../../core/services/app-config.service';
 import { AtendimentoService } from '../../core/services/atendimento.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -47,6 +47,33 @@ interface TrechoNaTela {
   sequencia: number;
   texto: string;
   estado: 'transcrevendo' | 'pronto' | 'falhou';
+  falante: Falante;
+  falanteConfirmado: boolean;
+}
+
+/** Ordem do clique no rotulo: o medico chega a qualquer falante em ate tres cliques. */
+const PROXIMO_FALANTE: Record<Falante, Falante> = {
+  Indefinido: 'Medico',
+  Medico: 'Paciente',
+  Paciente: 'Acompanhante',
+  Acompanhante: 'Medico',
+};
+
+const ROTULO_FALANTE: Record<Falante, string> = {
+  Indefinido: 'Quem fala?',
+  Medico: 'Médico',
+  Paciente: 'Paciente',
+  Acompanhante: 'Acompanhante',
+};
+
+function naTela(trecho: TrechoRegistrado): TrechoNaTela {
+  return {
+    sequencia: trecho.sequencia,
+    texto: trecho.texto,
+    estado: 'pronto',
+    falante: trecho.falante ?? 'Indefinido',
+    falanteConfirmado: trecho.falanteConfirmado ?? false,
+  };
 }
 
 const CAMPOS: DefinicaoCampo[] = [
@@ -307,8 +334,10 @@ export class AtendimentoComponent {
         // Atendimento do fluxo antigo nao tem trechos: a transcricao inteira vira um so.
         const trechos = detalhe.trechos.length > 0
           ? detalhe.trechos
-          : (detalhe.transcricao ? [{ sequencia: -1, texto: detalhe.transcricao, dadosProtegidos: 0 }] : []);
-        this.trechos.set(trechos.map(({ sequencia, texto }) => ({ sequencia, texto, estado: 'pronto' })));
+          : (detalhe.transcricao
+              ? [{ sequencia: -1, texto: detalhe.transcricao, dadosProtegidos: 0, falante: 'Indefinido' as const, falanteConfirmado: false }]
+              : []);
+        this.trechos.set(trechos.map(naTela));
         this.proximaSequenciaDemonstracao = Math.max(-1, ...trechos.map((t) => t.sequencia)) + 1;
         this.origens.set(detalhe.origensIA ?? {});
 
@@ -477,6 +506,46 @@ export class AtendimentoComponent {
     });
   }
 
+  readonly rotuloFalante = ROTULO_FALANTE;
+
+  /** Quem a IA disse que falou; o que o medico confirmou nao muda. */
+  private aplicarFalantes(falantes: Record<number, string>): void {
+    this.trechos.update((lista) =>
+      lista.map((trecho) => {
+        const falante = falantes[trecho.sequencia] as Falante | undefined;
+        return falante && !trecho.falanteConfirmado ? { ...trecho, falante } : trecho;
+      }),
+    );
+  }
+
+  /**
+   * O medico corrige quem disse o trecho com um clique no rotulo (Medico,
+   * Paciente, Acompanhante, em ciclo). A tela muda na hora; se o servidor
+   * recusar, volta ao que era.
+   */
+  trocarFalante(trecho: TrechoNaTela): void {
+    if (trecho.estado !== 'pronto' || this.etapa() === 'encerrado') {
+      return;
+    }
+
+    const anterior = { falante: trecho.falante, falanteConfirmado: trecho.falanteConfirmado };
+    const falante = PROXIMO_FALANTE[trecho.falante];
+    this.atualizarTrecho(trecho.sequencia, { falante, falanteConfirmado: true });
+
+    this.transcricoes.definirFalante(this.id(), trecho.sequencia, falante).subscribe({
+      error: () => {
+        this.atualizarTrecho(trecho.sequencia, anterior);
+        this.erro.set('Não foi possível corrigir quem fala neste trecho.');
+      },
+    });
+  }
+
+  private atualizarTrecho(sequencia: number, mudanca: Partial<TrechoNaTela>): void {
+    this.trechos.update((lista) =>
+      lista.map((trecho) => (trecho.sequencia === sequencia ? { ...trecho, ...mudanca } : trecho)),
+    );
+  }
+
   quantidadeDeOrigens(campo: Campo): number {
     return this.origens()[campo]?.length ?? 0;
   }
@@ -515,7 +584,7 @@ export class AtendimentoComponent {
       const atualizada = await firstValueFrom(this.transcricoes.protegerTermo(this.id(), termo));
       const pendentes = this.trechos().filter((trecho) => trecho.estado !== 'pronto');
       this.trechos.set([
-        ...atualizada.trechos.map(({ sequencia, texto }) => ({ sequencia, texto, estado: 'pronto' as const })),
+        ...atualizada.trechos.map(naTela),
         ...pendentes,
       ].sort((a, b) => a.sequencia - b.sequencia));
       this.dadosProtegidos.set(atualizada.dadosProtegidos);
@@ -534,17 +603,17 @@ export class AtendimentoComponent {
   }
 
   private registrarTexto(sequencia: number, texto: string): void {
-    this.colocarTrecho({ sequencia, texto, estado: 'transcrevendo' });
+    this.colocarTrecho({ sequencia, texto, estado: 'transcrevendo', falante: 'Indefinido', falanteConfirmado: false });
     this.acompanhar(firstValueFrom(this.transcricoes.registrarTrecho(this.id(), sequencia, texto)), sequencia);
   }
 
   private registrarAudio(sequencia: number, audio: Blob, extensao: string): void {
-    this.colocarTrecho({ sequencia, texto: '', estado: 'transcrevendo' });
+    this.colocarTrecho({ sequencia, texto: '', estado: 'transcrevendo', falante: 'Indefinido', falanteConfirmado: false });
     this.acompanhar(firstValueFrom(this.transcricoes.transcreverTrecho(this.id(), sequencia, audio, extensao)), sequencia);
   }
 
   /** Cada envio vira um trecho na tela; o encerramento espera todos terminarem. */
-  private acompanhar(envio: Promise<{ texto: string; dadosProtegidos: number } | null>, sequencia: number): void {
+  private acompanhar(envio: Promise<TrechoRegistrado | null>, sequencia: number): void {
     const acompanhado = envio
       .then((trecho) => {
         if (!trecho) {
@@ -553,12 +622,12 @@ export class AtendimentoComponent {
           return;
         }
 
-        this.colocarTrecho({ sequencia, texto: trecho.texto, estado: 'pronto' });
+        this.colocarTrecho(naTela(trecho));
         this.dadosProtegidos.update((total) => total + trecho.dadosProtegidos);
         this.trechosDesdeRascunho++;
         this.avaliarAtualizacao();
       })
-      .catch(() => this.colocarTrecho({ sequencia, texto: '', estado: 'falhou' }))
+      .catch(() => this.colocarTrecho({ sequencia, texto: '', estado: 'falhou', falante: 'Indefinido', falanteConfirmado: false }))
       .finally(() => this.enviosPendentes.delete(acompanhado));
 
     this.enviosPendentes.add(acompanhado);
@@ -661,12 +730,13 @@ export class AtendimentoComponent {
     const considerados = this.trechosDesdeRascunho;
 
     try {
-      const { rascunho, origens } = await firstValueFrom(this.transcricoes.gerarRascunho(this.id(), final));
+      const { rascunho, origens, falantes } = await firstValueFrom(this.transcricoes.gerarRascunho(this.id(), final));
       this.trechosDesdeRascunho = Math.max(0, this.trechosDesdeRascunho - considerados);
       this.ultimoRascunhoEm = Date.now();
       this.rascunhoAtualizadoEm.set(new Date());
       this.erroIA.set(null);
       this.origens.set(origens ?? {});
+      this.aplicarFalantes(falantes ?? {});
       this.aplicarRascunho(rascunho);
     } catch (erro) {
       this.ultimoRascunhoEm = Date.now();

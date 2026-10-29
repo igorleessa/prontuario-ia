@@ -21,7 +21,12 @@ public sealed record RascunhoClinicoDto(
 /// </summary>
 public sealed record RascunhoComOrigensDto(
     RascunhoClinicoDto Rascunho,
-    IReadOnlyDictionary<string, IReadOnlyList<int>> Origens)
+    IReadOnlyDictionary<string, IReadOnlyList<int>> Origens,
+    /// <summary>
+    /// Quem disse cada trecho, pela sequencia: "Medico", "Paciente" ou
+    /// "Acompanhante". Atribuido pelo conteudo da fala.
+    /// </summary>
+    IReadOnlyDictionary<int, string>? Falantes = null)
 {
     public static readonly IReadOnlyDictionary<string, IReadOnlyList<int>> SemOrigens =
         new Dictionary<string, IReadOnlyList<int>>();

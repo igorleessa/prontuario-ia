@@ -29,4 +29,10 @@ export interface TrechoRegistrado {
   sequencia: number;
   texto: string;
   dadosProtegidos: number;
+  falante: Falante;
+  /** O médico definiu o falante; a IA não o muda mais. */
+  falanteConfirmado: boolean;
 }
+
+/** Quem disse o trecho. Atribuído pela IA pelo conteúdo da fala, corrigível pelo médico. */
+export type Falante = 'Indefinido' | 'Medico' | 'Paciente' | 'Acompanhante';

@@ -131,7 +131,7 @@ public class AtendimentoService : IAtendimentoService
         var trechos = await _db.TrechosTranscricao
             .Where(t => t.Transcricao!.SessaoTranscricao!.AtendimentoId == atendimentoId)
             .OrderBy(t => t.Sequencia)
-            .Select(t => new { t.Sequencia, t.Texto })
+            .Select(t => new { t.Sequencia, t.Texto, t.Falante, t.FalanteConfirmado })
             .ToListAsync(cancellationToken);
 
         return trechos
@@ -139,7 +139,9 @@ public class AtendimentoService : IAtendimentoService
             .Select(t => new TrechoRegistradoDto(
                 t.Sequencia,
                 _sanitizador.Reidentificar(t.Texto, identidade),
-                IdentidadeDoAtendimento.ContarMarcadores(t.Texto)))
+                IdentidadeDoAtendimento.ContarMarcadores(t.Texto),
+                t.Falante.ToString(),
+                t.FalanteConfirmado))
             .ToList();
     }
 

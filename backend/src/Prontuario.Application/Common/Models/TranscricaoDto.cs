@@ -38,7 +38,15 @@ public sealed record RegistrarTrechoDto(int Sequencia, string Texto);
 /// Trecho como o medico o ve: com os dados do paciente devolvidos a partir do
 /// cadastro e os de terceiros apagados.
 /// </summary>
-public sealed record TrechoRegistradoDto(int Sequencia, string Texto, int DadosProtegidos);
+public sealed record TrechoRegistradoDto(
+    int Sequencia,
+    string Texto,
+    int DadosProtegidos,
+    string Falante = "Indefinido",
+    bool FalanteConfirmado = false);
+
+/// <summary>O medico corrigiu quem disse o trecho.</summary>
+public sealed record DefinirFalanteDto(string Falante);
 
 /// <summary>O medico marcou um trecho da transcricao como dado pessoal.</summary>
 public sealed record ProtegerTermoDto(string Termo);

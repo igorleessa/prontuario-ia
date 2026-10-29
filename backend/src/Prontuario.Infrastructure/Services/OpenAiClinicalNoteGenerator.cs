@@ -55,6 +55,14 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
         - Em "origens", para cada campo, liste os numeros dos trechos de onde tirou o conteudo
           dele, em ordem. Campo null tem lista vazia. Nao cite trecho que nao sustente o campo.
 
+        Quem fala:
+        - A transcricao nao separa as vozes. Em "falantes", diga quem disse cada trecho
+          ("medico", "paciente" ou "acompanhante"), pelo conteudo: perguntas, exame, raciocinio
+          e prescricao costumam ser do medico; relato de sintomas e historia, do paciente;
+          quem fala do paciente na terceira pessoa ("ela esta com febre") e acompanhante.
+        - Trecho que ja chega com o falante entre parenteses foi confirmado pelo medico: use
+          como esta. Trecho que mistura falas fica com quem fala a maior parte.
+
         O que vai em cada campo:
         - queixaPrincipal: o motivo da consulta em uma frase curta, com a duracao quando dita
           (ex.: "Tosse e dor de garganta ha 4 dias.").
@@ -150,8 +158,42 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
         var rascunho = JsonSerializer.Deserialize<RascunhoClinicoDto>(conteudo, OpcoesJson)
             ?? throw new InvalidOperationException("Nao foi possivel interpretar o rascunho devolvido pela IA.");
 
-        return new RascunhoComOrigensDto(Normalizar(rascunho), LerOrigens(conteudo));
+        return new RascunhoComOrigensDto(Normalizar(rascunho), LerOrigens(conteudo), LerFalantes(conteudo));
     }
+
+    /// <summary>Falante por trecho; entrada fora do formato e ignorada.</summary>
+    internal static IReadOnlyDictionary<int, string> LerFalantes(string conteudo)
+    {
+        using var json = JsonDocument.Parse(conteudo);
+        var resultado = new Dictionary<int, string>();
+
+        if (!json.RootElement.TryGetProperty("falantes", out var falantes) || falantes.ValueKind != JsonValueKind.Array)
+        {
+            return resultado;
+        }
+
+        foreach (var item in falantes.EnumerateArray())
+        {
+            if (item.ValueKind == JsonValueKind.Object
+                && item.TryGetProperty("trecho", out var trecho)
+                && trecho.ValueKind == JsonValueKind.Number && trecho.TryGetInt32(out var sequencia)
+                && item.TryGetProperty("falante", out var falante)
+                && falante.ValueKind == JsonValueKind.String && falante.GetString() is { } nome
+                && NomesFalantes.TryGetValue(nome, out var normalizado))
+            {
+                resultado[sequencia] = normalizado;
+            }
+        }
+
+        return resultado;
+    }
+
+    private static readonly Dictionary<string, string> NomesFalantes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["medico"] = "Medico",
+        ["paciente"] = "Paciente",
+        ["acompanhante"] = "Acompanhante",
+    };
 
     /// <summary>Origens por campo; o que nao for lista de inteiros e ignorado, nao derruba o rascunho.</summary>
     internal static IReadOnlyDictionary<string, IReadOnlyList<int>> LerOrigens(string conteudo)
@@ -380,6 +422,23 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
             properties = campos.Keys.ToDictionary(
                 campo => campo,
                 _ => (object)new { type = "array", items = new { type = "integer" } }),
+        };
+
+        propriedades["falantes"] = new
+        {
+            type = "array",
+            description = "Quem disse cada trecho da transcricao.",
+            items = new
+            {
+                type = "object",
+                additionalProperties = false,
+                required = new[] { "trecho", "falante" },
+                properties = new Dictionary<string, object>
+                {
+                    ["trecho"] = new { type = "integer" },
+                    ["falante"] = new { type = "string", @enum = new[] { "medico", "paciente", "acompanhante" } },
+                },
+            },
         };
 
         return new

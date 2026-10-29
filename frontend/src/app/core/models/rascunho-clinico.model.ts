@@ -16,6 +16,8 @@ export type OrigensRascunho = Partial<Record<keyof RascunhoClinico, number[]>>;
 export interface RascunhoComOrigens {
   rascunho: RascunhoClinico;
   origens: OrigensRascunho;
+  /** Quem disse cada trecho, pela sequência ("Medico", "Paciente", "Acompanhante"). */
+  falantes?: Record<number, string> | null;
 }
 
 export const RASCUNHO_VAZIO: RascunhoClinico = {

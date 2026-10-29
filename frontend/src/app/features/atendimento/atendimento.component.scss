@@ -337,6 +337,44 @@
 
 .trecho--pendente { color: var(--texto-tenue); }
 
+/* Dialogo: medico de um lado, paciente e acompanhante do outro. */
+.trecho[data-falante='Medico'] {
+  margin-right: 1.5rem;
+  border-color: var(--primary-borda);
+  background: var(--primary-suave);
+}
+
+.trecho[data-falante='Paciente'],
+.trecho[data-falante='Acompanhante'] { margin-left: 1.5rem; }
+
+.trecho[data-falante='Acompanhante'] {
+  border-color: color-mix(in srgb, var(--alerta) 30%, transparent);
+  background: var(--alerta-suave);
+}
+
+.trecho__falante {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: -0.125rem 0 0.25rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--texto-tenue);
+  font: inherit;
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.trecho__falante:hover:not(:disabled) { color: var(--primary); text-decoration: underline; }
+.trecho__falante:disabled { cursor: default; }
+
+.trecho[data-falante='Medico'] .trecho__falante { color: var(--primary-forte); }
+.trecho[data-falante='Acompanhante'] .trecho__falante { color: var(--alerta); }
+
 .trecho--origem {
   border-color: var(--ia-borda);
   background: var(--ia-suave);

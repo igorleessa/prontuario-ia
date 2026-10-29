@@ -283,6 +283,7 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
         registro.Cid10Sugerido = rascunho.Cid10Sugerido;
         registro.Conduta = rascunho.Conduta;
         registro.OrigensJson = JsonSerializer.Serialize(origens);
+        AplicarFalantes(transcricao, gerado.Falantes);
 
         transcricao.Status = StatusProcessamento.Concluido;
         atendimento.ErroProcessamentoIA = null;
@@ -292,16 +293,39 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
             AcoesAuditoria.RascunhoGerado, atendimentoId, $"{sanitizado.TotalSubstituicoes} dados protegidos",
             cancellationToken);
 
-        return ResultadoOperacao<RascunhoComOrigensDto>.Ok(new RascunhoComOrigensDto(rascunho, origens));
+        return ResultadoOperacao<RascunhoComOrigensDto>.Ok(
+            new RascunhoComOrigensDto(rascunho, origens, FalantesAtuais(transcricao)));
     }
 
-    private static string TextoNumerado(Transcricao transcricao)
-        => transcricao.Trechos.Count == 0
-            ? transcricao.Texto
-            : string.Join(
-                "\n",
-                transcricao.Trechos.OrderBy(t => t.Sequencia).Where(t => t.Texto.Length > 0)
-                    .Select(t => $"[{t.Sequencia}] {t.Texto}"));
+    private static string TextoNumerado(Transcricao transcricao) => TextoDaConsulta.Numerado(transcricao);
+
+    /// <summary>
+    /// Leva aos trechos quem a IA disse que falou. O que o medico confirmou nao
+    /// muda, e sequencia que nao existe e ignorada.
+    /// </summary>
+    private static void AplicarFalantes(Transcricao transcricao, IReadOnlyDictionary<int, string>? falantes)
+    {
+        foreach (var trecho in transcricao.Trechos.Where(t => !t.FalanteConfirmado))
+        {
+            if (falantes is not null && falantes.TryGetValue(trecho.Sequencia, out var nome)
+                && Enum.TryParse<Falante>(nome, ignoreCase: true, out var falante))
+            {
+                trecho.Falante = falante;
+            }
+        }
+    }
+
+    private static Dictionary<int, string> FalantesAtuais(Transcricao transcricao)
+        => transcricao.Trechos
+            .Where(t => t.Falante != Falante.Indefinido)
+            .ToDictionary(t => t.Sequencia, t => t.Falante.ToString());
+
+    private TrechoRegistradoDto ParaTela(TrechoTranscricao trecho, IdentidadeAtendimento identidade) => new(
+        trecho.Sequencia,
+        _sanitizador.Reidentificar(trecho.Texto, identidade),
+        IdentidadeDoAtendimento.ContarMarcadores(trecho.Texto),
+        trecho.Falante.ToString(),
+        trecho.FalanteConfirmado);
 
     /// <summary>
     /// So ficam origens que apontam para trechos que existem e para campos que
@@ -391,14 +415,34 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
         var trechos = transcricao.Trechos
             .OrderBy(t => t.Sequencia)
             .Where(t => t.Texto.Length > 0)
-            .Select(t => new TrechoRegistradoDto(
-                t.Sequencia,
-                _sanitizador.Reidentificar(t.Texto, identidade),
-                IdentidadeDoAtendimento.ContarMarcadores(t.Texto)))
+            .Select(t => ParaTela(t, identidade))
             .ToList();
 
         return ResultadoOperacao<TranscricaoAtualizadaDto>.Ok(new TranscricaoAtualizadaDto(
             trechos, IdentidadeDoAtendimento.ContarMarcadores(transcricao.Texto)));
+    }
+
+    public async Task<ResultadoOperacao<TrechoRegistradoDto>> DefinirFalanteAsync(
+        Guid atendimentoId, Guid clinicaId, int sequencia, string falante, CancellationToken cancellationToken = default)
+    {
+        if (!Enum.TryParse<Falante>(falante, ignoreCase: true, out var valor) || !Enum.IsDefined(valor))
+        {
+            return ResultadoOperacao<TrechoRegistradoDto>.Conflito("Falante invalido.");
+        }
+
+        var atendimento = await CarregarAsync(atendimentoId, clinicaId, cancellationToken);
+        var trecho = atendimento?.SessaoTranscricao?.Transcricao?.Trechos.SingleOrDefault(t => t.Sequencia == sequencia);
+        if (atendimento is null || trecho is null)
+        {
+            return ResultadoOperacao<TrechoRegistradoDto>.NaoEncontrado();
+        }
+
+        // Indefinido devolve o trecho a IA; qualquer outro valor e a palavra final do medico.
+        trecho.Falante = valor;
+        trecho.FalanteConfirmado = valor != Falante.Indefinido;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return ResultadoOperacao<TrechoRegistradoDto>.Ok(ParaTela(trecho, Identidade(atendimento)));
     }
 
     public async Task<ResultadoAtendimento> EncerrarAsync(
@@ -477,8 +521,8 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
 
         await _db.SaveChangesAsync(cancellationToken);
 
-        return new TrechoRegistradoDto(
-            sequencia, _sanitizador.Reidentificar(sanitizado.Valor, identidade), sanitizado.TotalSubstituicoes);
+        var guardado = transcricao.Trechos.Single(t => t.Sequencia == sequencia);
+        return ParaTela(guardado, identidade) with { DadosProtegidos = sanitizado.TotalSubstituicoes };
     }
 
     /// <summary>

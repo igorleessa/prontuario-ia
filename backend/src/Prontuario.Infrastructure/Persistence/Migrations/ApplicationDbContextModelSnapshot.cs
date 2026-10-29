@@ -523,6 +523,14 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CriadoEm")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Falante")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<bool>("FalanteConfirmado")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("ReconhecimentoAplicado")
                         .HasColumnType("boolean");
 

@@ -1,4 +1,5 @@
 using Prontuario.Domain.Common;
+using Prontuario.Domain.Enums;
 
 namespace Prontuario.Domain.Entities;
 
@@ -21,4 +22,10 @@ public class TrechoTranscricao : BaseEntity
     /// para a IA depois de passar por ele.
     /// </summary>
     public bool ReconhecimentoAplicado { get; set; }
+
+    /// <summary>Quem disse o trecho, segundo a IA ou o medico.</summary>
+    public Falante Falante { get; set; } = Falante.Indefinido;
+
+    /// <summary>O medico definiu o falante: a IA nao o muda mais.</summary>
+    public bool FalanteConfirmado { get; set; }
 }

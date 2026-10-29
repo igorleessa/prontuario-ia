@@ -69,11 +69,14 @@ public class DocumentoClinicoService : IDocumentoClinicoService
             ?? throw new InvalidOperationException(
                 "Nenhuma chave de API configurada para a clinica. Cadastre a chave em Configuracoes.");
 
-        var transcricao = await _db.Transcricoes
+        // Em forma de dialogo: quem disse o que pesa na redacao (o atestado e
+        // pedido pelo paciente; a prescricao e do medico).
+        var consulta = await _db.Transcricoes
+            .Include(t => t.Trechos)
             .Where(t => t.SessaoTranscricao!.AtendimentoId == atendimentoId)
             .OrderByDescending(t => t.CriadoEm)
-            .Select(t => t.Texto)
-            .FirstOrDefaultAsync(cancellationToken) ?? string.Empty;
+            .FirstOrDefaultAsync(cancellationToken);
+        var transcricao = consulta is null ? string.Empty : TextoDaConsulta.Dialogo(consulta);
 
         var registro = await ObterRegistroClinicoAsync(atendimento, cancellationToken);
         var contexto = new ContextoGeracao(

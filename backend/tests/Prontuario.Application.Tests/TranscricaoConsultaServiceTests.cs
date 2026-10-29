@@ -379,6 +379,78 @@ public class TranscricaoConsultaServiceTests : IDisposable
         new CofreTermosProtegidos(new EphemeralDataProtectionProvider()));
 
     [Fact]
+    public async Task Falantes_DaIASaoAplicadosMasNaoMudamOQueOMedicoConfirmou()
+    {
+        await Registrar(0, "O que a trouxe hoje?");
+        await Registrar(1, "Estou com tosse.");
+        await _servico.DefinirFalanteAsync(_atendimento.Id, _clinica.Id, 1, "Acompanhante");
+
+        _llm.GerarRascunhoAsync(
+                Arg.Any<TextoSanitizado>(), Arg.Any<CredenciaisIA>(), Arg.Any<ContextoGeracao>(), Arg.Any<CancellationToken>())
+            .Returns(new RascunhoComOrigensDto(
+                new RascunhoClinicoDto("Tosse.", null, null, null, null, null, null),
+                new Dictionary<string, IReadOnlyList<int>>(),
+                new Dictionary<int, string> { [0] = "Medico", [1] = "Paciente", [9] = "Paciente" }));
+
+        var resultado = await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+
+        var trechos = _db.TrechosTranscricao.OrderBy(t => t.Sequencia).ToList();
+        Assert.Equal(Falante.Medico, trechos[0].Falante);
+        Assert.Equal(Falante.Acompanhante, trechos[1].Falante);
+        Assert.Equal("Acompanhante", resultado.Valor!.Falantes![1]);
+        Assert.False(resultado.Valor.Falantes.ContainsKey(9));
+    }
+
+    [Fact]
+    public async Task FalanteConfirmado_VaiParaAIAEntreParenteses()
+    {
+        await Registrar(0, "Ela está com febre desde ontem.");
+        await _servico.DefinirFalanteAsync(_atendimento.Id, _clinica.Id, 0, "acompanhante");
+
+        TextoSanitizado? enviado = null;
+        _llm.GerarRascunhoAsync(
+                Arg.Do<TextoSanitizado>(texto => enviado = texto),
+                Arg.Any<CredenciaisIA>(), Arg.Any<ContextoGeracao>(), Arg.Any<CancellationToken>())
+            .Returns(ComOrigens(new RascunhoClinicoDto("Febre.", null, null, null, null, null, null)));
+
+        await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+
+        Assert.Equal("[0] (acompanhante) Ela está com febre desde ontem.", enviado!.Valor);
+    }
+
+    [Fact]
+    public async Task DefinirFalante_Indefinido_DevolveADecisaoAIA()
+    {
+        await Registrar(0, "Tosse.");
+        await _servico.DefinirFalanteAsync(_atendimento.Id, _clinica.Id, 0, "Paciente");
+
+        var resultado = await _servico.DefinirFalanteAsync(_atendimento.Id, _clinica.Id, 0, "Indefinido");
+
+        Assert.Equal("Indefinido", resultado.Valor!.Falante);
+        Assert.False(_db.TrechosTranscricao.Single().FalanteConfirmado);
+    }
+
+    [Theory]
+    [InlineData("enfermeira")]
+    [InlineData("99")]
+    public async Task DefinirFalante_ValorDesconhecido_EhRecusado(string falante)
+    {
+        await Registrar(0, "Tosse.");
+
+        var resultado = await _servico.DefinirFalanteAsync(_atendimento.Id, _clinica.Id, 0, falante);
+
+        Assert.Equal(ResultadoAtendimento.Conflito, resultado.Resultado);
+    }
+
+    [Fact]
+    public async Task DefinirFalante_TrechoInexistente_NaoEhEncontrado()
+    {
+        var resultado = await _servico.DefinirFalanteAsync(_atendimento.Id, _clinica.Id, 5, "Medico");
+
+        Assert.Equal(ResultadoAtendimento.NaoEncontrado, resultado.Resultado);
+    }
+
+    [Fact]
     public async Task Trecho_SemConsentimento_NaoEhGuardado()
     {
         _atendimento.ConsentimentoTranscricao = false;
