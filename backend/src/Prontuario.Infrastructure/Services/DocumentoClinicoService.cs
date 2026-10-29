@@ -14,19 +14,22 @@ public class DocumentoClinicoService : IDocumentoClinicoService
     private readonly IConfiguracaoIAService _configuracoes;
     private readonly IUsuarioAtual _usuario;
     private readonly IAuditoriaService _auditoria;
+    private readonly ISanitizadorDados _sanitizador;
 
     public DocumentoClinicoService(
         ApplicationDbContext db,
         IClinicalNoteGenerator llm,
         IConfiguracaoIAService configuracoes,
         IUsuarioAtual usuario,
-        IAuditoriaService auditoria)
+        IAuditoriaService auditoria,
+        ISanitizadorDados sanitizador)
     {
         _db = db;
         _llm = llm;
         _configuracoes = configuracoes;
         _usuario = usuario;
         _auditoria = auditoria;
+        _sanitizador = sanitizador;
     }
 
     public async Task<IReadOnlyList<DocumentoClinicoDto>> ListarAsync(
@@ -47,6 +50,7 @@ public class DocumentoClinicoService : IDocumentoClinicoService
 
         var atendimento = await _db.Atendimentos
             .Include(a => a.Medico)
+            .Include(a => a.PacienteRef)
             .Include(a => a.TemplateNota)
             .Include(a => a.Prontuario)
             .FirstOrDefaultAsync(
@@ -62,7 +66,7 @@ public class DocumentoClinicoService : IDocumentoClinicoService
                 "Nenhuma chave de API configurada para a clinica. Cadastre a chave em Configuracoes.");
 
         var transcricao = await _db.Transcricoes
-            .Where(t => t.GravacaoAudio!.AtendimentoId == atendimentoId)
+            .Where(t => t.SessaoTranscricao!.AtendimentoId == atendimentoId)
             .OrderByDescending(t => t.CriadoEm)
             .Select(t => t.Texto)
             .FirstOrDefaultAsync(cancellationToken) ?? string.Empty;
@@ -71,8 +75,18 @@ public class DocumentoClinicoService : IDocumentoClinicoService
         var contexto = new ContextoGeracao(
             atendimento.TemplateNota?.Instrucoes, atendimento.Medico!.InstrucoesEstilo);
 
-        var conteudo = await _llm.GerarDocumentoAsync(
-            tipoDocumento.ToString(), transcricao, registro, credenciais, contexto, cancellationToken);
+        // Transcricao e registro passam pela sanitizacao antes de ir ao provedor:
+        // o medico pode ter digitado nomes no registro revisado. O nome do
+        // paciente volta no fim, a partir do cadastro, no lugar do marcador.
+        var identidade = IdentidadeDoAtendimento.De(atendimento.PacienteRef!, atendimento.Medico!);
+        var redigido = await _llm.GerarDocumentoAsync(
+            tipoDocumento.ToString(),
+            _sanitizador.Sanitizar(transcricao, identidade),
+            _sanitizador.SanitizarRegistro(registro, identidade),
+            credenciais,
+            contexto,
+            cancellationToken);
+        var conteudo = _sanitizador.Reidentificar(redigido, identidade);
 
         // Um documento por tipo: regerar substitui, para o medico nao acabar com
         // duas receitas divergentes do mesmo atendimento.
@@ -135,7 +149,7 @@ public class DocumentoClinicoService : IDocumentoClinicoService
         }
 
         var rascunho = await _db.RascunhosIA
-            .Where(r => r.Transcricao!.GravacaoAudio!.AtendimentoId == atendimento.Id)
+            .Where(r => r.Transcricao!.SessaoTranscricao!.AtendimentoId == atendimento.Id)
             .OrderByDescending(r => r.CriadoEm)
             .FirstOrDefaultAsync(cancellationToken);
 

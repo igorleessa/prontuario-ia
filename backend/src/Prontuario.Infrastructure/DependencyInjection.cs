@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Prontuario.Application.Common.Interfaces;
+using Prontuario.Application.Privacidade;
 using Prontuario.Domain.Entities;
 using Prontuario.Infrastructure.Persistence;
 using Prontuario.Infrastructure.Services;
@@ -23,10 +24,6 @@ public static class DependencyInjection
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<DatabaseInitializer>();
 
-        services.Configure<ArmazenamentoAudioOptions>(
-            configuration.GetSection(ArmazenamentoAudioOptions.SectionName));
-        services.AddSingleton<IArmazenamentoAudio, ArmazenamentoAudioMinio>();
-
         // O chaveiro precisa sobreviver ao container: sem isso, toda recriacao
         // tornaria ilegiveis as chaves de API ja cadastradas pelas clinicas.
         var caminhoChaves = configuration["DataProtection:Caminho"];
@@ -42,16 +39,19 @@ public static class DependencyInjection
         services.AddHttpClient(OpenAiCliente.Nome, cliente =>
         {
             cliente.BaseAddress = new Uri(OpenAiCliente.BaseUrl);
-            // Transcricao de consulta inteira e lenta; o padrao de 100s estoura.
-            cliente.Timeout = TimeSpan.FromMinutes(10);
+            // O rascunho e refeito durante a consulta, com o medico esperando:
+            // uma chamada presa nao pode segurar a tela.
+            cliente.Timeout = TimeSpan.FromSeconds(90);
         });
 
-        services.AddScoped<ITranscriptionService, OpenAiTranscriptionService>();
-        services.AddScoped<IClinicalNoteGenerator, OpenAiClinicalNoteGenerator>();
+        // Toda saida para o provedor de IA passa pela sanitizacao local.
+        services.AddSingleton<ISanitizadorDados, SanitizadorDados>();
 
-        services.AddSingleton<IFilaProcessamentoIA, FilaProcessamentoIA>();
-        services.AddHostedService<ProcessamentoIAWorker>();
-        services.AddHostedService<RetencaoAudioWorker>();
+        services.Configure<TranscricaoOptions>(configuration.GetSection(TranscricaoOptions.SectionName));
+        services.AddScoped<ITranscriptionService, OpenAiTranscriptionService>();
+        services.AddScoped<IProvedorTranscricaoTempoReal, OpenAiTranscricaoTempoReal>();
+        services.AddScoped<IClinicalNoteGenerator, OpenAiClinicalNoteGenerator>();
+        services.AddScoped<ITranscricaoConsultaService, TranscricaoConsultaService>();
 
         services.AddSingleton<INotaClinicaFormatter, NotaClinicaFormatter>();
         services.AddSingleton<IGeradorPdfNota, GeradorPdfNota>();

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using NSubstitute;
 using Prontuario.Application.Common.Interfaces;
 using Prontuario.Application.Common.Models;
+using Prontuario.Application.Privacidade;
 using Prontuario.Domain.Entities;
 using Prontuario.Domain.Enums;
 using Prontuario.Infrastructure.Persistence;
@@ -10,15 +11,14 @@ using Prontuario.Infrastructure.Services;
 namespace Prontuario.Application.Tests;
 
 /// <summary>
-/// Regras que protegem o registro clinico: escopo por clinica, trava do
-/// atendimento encerrado e reprocessamento sem duplicacao. Sao as que, se
-/// quebrarem, deixam o sistema perder ou sobrescrever documentacao medica.
+/// Regras que protegem o registro clinico: escopo por clinica e trava do
+/// atendimento encerrado. Sao as que, se quebrarem, deixam o sistema perder ou
+/// sobrescrever documentacao medica.
 /// </summary>
 public class AtendimentoServiceTests : IDisposable
 {
     private readonly ApplicationDbContext _db;
     private readonly IRegistroClinicoOutput _output = Substitute.For<IRegistroClinicoOutput>();
-    private readonly IFilaProcessamentoIA _fila = Substitute.For<IFilaProcessamentoIA>();
     private readonly AtendimentoService _servico;
 
     private readonly Clinica _clinica = new() { Nome = "Clinica A", ModoOperacao = ModoOperacao.Integrado };
@@ -46,11 +46,10 @@ public class AtendimentoServiceTests : IDisposable
         _servico = new AtendimentoService(
             _db,
             _output,
-            Substitute.For<IArmazenamentoAudio>(),
-            _fila,
             Substitute.For<IExportadorNota>(),
             new NotaClinicaFormatter(),
-            Substitute.For<IAuditoriaService>());
+            Substitute.For<IAuditoriaService>(),
+            new SanitizadorDados());
     }
 
     [Fact]
@@ -120,33 +119,46 @@ public class AtendimentoServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Reprocessar_SemAudio_NaoEnfileiraNada()
+    public async Task Consentimento_AtendimentoFinalizado_NaoReabreAConsulta()
     {
-        var atendimento = await CriarAtendimentoAsync(StatusAtendimento.EmRevisao);
+        var atendimento = await CriarAtendimentoAsync(StatusAtendimento.Finalizado);
 
-        var resultado = await _servico.ReprocessarAsync(atendimento.Id, _clinica.Id);
+        var registrado = await _servico.RegistrarConsentimentoAsync(atendimento.Id, _clinica.Id);
 
-        Assert.Equal(ResultadoAtendimento.Conflito, resultado);
-        await _fila.DidNotReceiveWithAnyArgs().EnfileirarAsync(default, default);
+        Assert.False(registrado);
+        Assert.Equal(StatusAtendimento.Finalizado, _db.Atendimentos.Single().Status);
     }
 
     [Fact]
-    public async Task Reprocessar_ComAudio_ReenfileiraOMesmoAtendimento()
+    public async Task Consentimento_LevaAConsultaAoVivo()
+    {
+        var atendimento = await CriarAtendimentoAsync(StatusAtendimento.AguardandoConsentimento);
+
+        await _servico.RegistrarConsentimentoAsync(atendimento.Id, _clinica.Id);
+
+        var salvo = _db.Atendimentos.Single();
+        Assert.Equal(StatusAtendimento.EmConsulta, salvo.Status);
+        Assert.True(salvo.ConsentimentoTranscricao);
+        Assert.NotNull(salvo.ConsentimentoEm);
+    }
+
+    [Fact]
+    public async Task Obter_MostraATranscricaoComOPacienteDeVoltaEOsTerceirosApagados()
     {
         var atendimento = await CriarAtendimentoAsync(StatusAtendimento.EmRevisao);
-        atendimento.ErroProcessamentoIA = "A API de texto respondeu 429";
-        _db.GravacoesAudio.Add(new GravacaoAudio
+        var sessao = new SessaoTranscricao { AtendimentoId = atendimento.Id };
+        _db.SessoesTranscricao.Add(sessao);
+        _db.Transcricoes.Add(new Transcricao
         {
-            AtendimentoId = atendimento.Id, StoragePath = "atendimentos/x.webm", DuracaoSegundos = 300,
+            SessaoTranscricaoId = sessao.Id,
+            Texto = "Bom dia, dona [PACIENTE]. A vizinha [PESSOA] ligou do [TELEFONE].",
         });
         await _db.SaveChangesAsync();
 
-        var resultado = await _servico.ReprocessarAsync(atendimento.Id, _clinica.Id);
+        var detalhe = await _servico.ObterAsync(atendimento.Id, _clinica.Id);
 
-        Assert.Equal(ResultadoAtendimento.Ok, resultado);
-        Assert.Single(_db.Atendimentos);
-        Assert.Null(_db.Atendimentos.Single().ErroProcessamentoIA);
-        await _fila.Received(1).EnfileirarAsync(atendimento.Id, Arg.Any<CancellationToken>());
+        Assert.Equal("Bom dia, dona Helena. A vizinha [PESSOA] ligou do [TELEFONE].", detalhe!.Transcricao);
+        Assert.Equal(3, detalhe.DadosPessoaisProtegidos);
     }
 
     [Fact]
@@ -155,9 +167,9 @@ public class AtendimentoServiceTests : IDisposable
         var atendimento = await CriarAtendimentoAsync(StatusAtendimento.Finalizado);
         var inicio = DateTime.UtcNow.AddMinutes(-10);
 
-        _db.GravacoesAudio.Add(new GravacaoAudio
+        _db.SessoesTranscricao.Add(new SessaoTranscricao
         {
-            AtendimentoId = atendimento.Id, StoragePath = "x", DuracaoSegundos = 600, CriadoEm = inicio,
+            AtendimentoId = atendimento.Id, DuracaoSegundos = 600, EncerradaEm = inicio,
         });
         _db.Prontuarios.Add(new ProntuarioRegistro
         {

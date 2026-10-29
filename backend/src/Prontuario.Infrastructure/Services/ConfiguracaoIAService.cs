@@ -16,7 +16,7 @@ public class ConfiguracaoIAService : IConfiguracaoIAService
     /// </summary>
     private const string Proposito = "Prontuario.ConfiguracaoIA.ChaveApi";
 
-    private const string ModeloTranscricaoPadrao = "whisper-1";
+    private const string ModeloTranscricaoPadrao = "gpt-4o-transcribe";
     private const string ModeloTextoPadrao = "gpt-4o";
 
     private readonly ApplicationDbContext _db;

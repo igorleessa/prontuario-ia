@@ -13,8 +13,9 @@ public class ApplicationDbContext : DbContext
     public DbSet<Usuario> Usuarios => Set<Usuario>();
     public DbSet<PacienteRef> Pacientes => Set<PacienteRef>();
     public DbSet<Atendimento> Atendimentos => Set<Atendimento>();
-    public DbSet<GravacaoAudio> GravacoesAudio => Set<GravacaoAudio>();
+    public DbSet<SessaoTranscricao> SessoesTranscricao => Set<SessaoTranscricao>();
     public DbSet<Transcricao> Transcricoes => Set<Transcricao>();
+    public DbSet<TrechoTranscricao> TrechosTranscricao => Set<TrechoTranscricao>();
     public DbSet<RascunhoIA> RascunhosIA => Set<RascunhoIA>();
     public DbSet<ProntuarioRegistro> Prontuarios => Set<ProntuarioRegistro>();
     public DbSet<NotaExportavel> NotasExportaveis => Set<NotaExportavel>();

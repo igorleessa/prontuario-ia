@@ -22,9 +22,6 @@ public class AtendimentosController : ApiControllerBase
         _pdf = pdf;
     }
 
-    /// <summary>Consulta longa em webm/opus fica na casa de poucos MB; 100 MB da folga sem virar porta aberta.</summary>
-    private const long TamanhoMaximoAudioBytes = 100L * 1024 * 1024;
-
     public record AbrirAtendimentoRequest(Guid PacienteRefId, Guid? TemplateNotaId);
 
     [HttpGet]
@@ -68,30 +65,10 @@ public class AtendimentosController : ApiControllerBase
     public async Task<IActionResult> RegistrarConsentimento(Guid id, CancellationToken cancellationToken)
         => await _atendimentos.RegistrarConsentimentoAsync(id, ClinicaId, cancellationToken) ? NoContent() : NotFound();
 
+    /// <summary>Segue direto para a revisao, sem transcricao (paciente que recusou, preenchimento manual).</summary>
     [HttpPost("{id:guid}/revisao")]
     public async Task<IActionResult> IniciarRevisao(Guid id, CancellationToken cancellationToken)
         => await _atendimentos.IniciarRevisaoAsync(id, ClinicaId, cancellationToken) ? NoContent() : NotFound();
-
-    /// <summary>
-    /// Recebe o audio da consulta (RF06) e dispara a transcricao e a extracao
-    /// estruturada em segundo plano (RF07/RF08).
-    /// </summary>
-    [HttpPost("{id:guid}/audio")]
-    [RequestSizeLimit(TamanhoMaximoAudioBytes)]
-    public async Task<IActionResult> EnviarAudio(
-        Guid id, IFormFile audio, [FromForm] int duracaoSegundos, CancellationToken cancellationToken)
-    {
-        if (audio.Length == 0)
-        {
-            return BadRequest(new { erro = "Audio vazio." });
-        }
-
-        await using var conteudo = audio.OpenReadStream();
-        var registrado = await _atendimentos.RegistrarAudioAsync(
-            id, ClinicaId, conteudo, audio.ContentType, duracaoSegundos, cancellationToken);
-
-        return registrado ? Accepted() : NotFound();
-    }
 
     [HttpPost("{id:guid}/confirmar")]
     public async Task<IActionResult> Confirmar(Guid id, RascunhoClinicoDto revisado, CancellationToken cancellationToken)
@@ -101,40 +78,6 @@ public class AtendimentosController : ApiControllerBase
             ResultadoAtendimento.Conflito => Conflict(new
             {
                 erro = "Este atendimento ja foi encerrado. Um registro assinado nao pode ser sobrescrito.",
-            }),
-            _ => NotFound(),
-        };
-
-    /// <summary>
-    /// Roda o pipeline sobre a consulta de exemplo, sem microfone nem upload.
-    /// Existe para a demonstracao ao cliente; so responde com Demonstracao:Habilitado.
-    /// </summary>
-    [HttpPost("{id:guid}/simular")]
-    public async Task<IActionResult> Simular(
-        Guid id, [FromServices] IConfiguration configuracao, CancellationToken cancellationToken)
-    {
-        if (!configuracao.GetValue<bool>("Demonstracao:Habilitado"))
-        {
-            return NotFound();
-        }
-
-        return await _atendimentos.SimularConsultaAsync(id, ClinicaId, cancellationToken) switch
-        {
-            ResultadoAtendimento.Ok => Accepted(),
-            ResultadoAtendimento.Conflito => Conflict(new { erro = "Este atendimento ja foi encerrado." }),
-            _ => NotFound(),
-        };
-    }
-
-    /// <summary>Refaz a transcricao e a extracao do audio ja gravado (RF13), sem duplicar o atendimento.</summary>
-    [HttpPost("{id:guid}/reprocessar")]
-    public async Task<IActionResult> Reprocessar(Guid id, CancellationToken cancellationToken)
-        => await _atendimentos.ReprocessarAsync(id, ClinicaId, cancellationToken) switch
-        {
-            ResultadoAtendimento.Ok => Accepted(),
-            ResultadoAtendimento.Conflito => Conflict(new
-            {
-                erro = "Nao ha audio para reprocessar neste atendimento, ou ele ja foi encerrado.",
             }),
             _ => NotFound(),
         };

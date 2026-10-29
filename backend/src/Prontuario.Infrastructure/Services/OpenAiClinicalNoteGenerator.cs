@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Prontuario.Application.Common.Interfaces;
 using Prontuario.Application.Common.Models;
+using Prontuario.Application.Privacidade;
 
 namespace Prontuario.Infrastructure.Services;
 
@@ -25,6 +26,13 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
         - Pode conter erros foneticos. Corrija a grafia de medicamentos, exames e termos
           tecnicos apenas quando a correcao for inequivoca (ex.: "lozartana" -> losartana).
           Na duvida, mantenha o que foi transcrito.
+
+        Sobre os dados pessoais:
+        - A transcricao foi pseudonimizada antes de chegar aqui. Marcadores entre colchetes
+          ([PACIENTE], [MEDICO], [PESSOA], [CPF], [TELEFONE], [ENDERECO], [DOCUMENTO]...)
+          substituem nomes e identificadores. Nunca tente adivinhar o valor original.
+        - Refira-se ao paciente como "paciente" e nao copie marcadores para o registro, a nao
+          ser que o dado seja clinicamente necessario (ex.: "acompanhado pela filha").
 
         Regras obrigatorias:
         - Use exclusivamente informacao presente na transcricao. Nunca invente sintomas,
@@ -62,6 +70,17 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
           atestado, encaminhamentos e retorno.
         """;
 
+    /// <summary>
+    /// Nos documentos o nome do paciente e preenchido depois, a partir do
+    /// cadastro: o marcador e o que garante que ele saia do lugar certo.
+    /// </summary>
+    private const string InstrucaoMarcadores = """
+
+        Dados pessoais chegam pseudonimizados por marcadores entre colchetes ([PACIENTE], [PESSOA],
+        [CPF]...). Quando o documento precisar do nome do paciente, escreva exatamente [PACIENTE];
+        nunca invente nome, documento ou endereco.
+        """;
+
     private static readonly JsonSerializerOptions OpcoesJson = new(JsonSerializerDefaults.Web);
 
     private readonly IHttpClientFactory _fabrica;
@@ -69,7 +88,7 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
     public OpenAiClinicalNoteGenerator(IHttpClientFactory fabrica) => _fabrica = fabrica;
 
     public async Task<RascunhoClinicoDto> GerarRascunhoAsync(
-        string transcricao,
+        TextoSanitizado transcricao,
         CredenciaisIA credenciais,
         ContextoGeracao contexto,
         CancellationToken cancellationToken = default)
@@ -81,7 +100,7 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
             messages = new object[]
             {
                 new { role = "system", content = ComContexto(Instrucao, contexto) },
-                new { role = "user", content = $"Transcricao da consulta:\n\n<transcricao>\n{transcricao}\n</transcricao>" },
+                new { role = "user", content = $"Transcricao da consulta:\n\n<transcricao>\n{transcricao.Valor}\n</transcricao>" },
             },
             response_format = new
             {
@@ -175,18 +194,18 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
 
     public async Task<string> GerarDocumentoAsync(
         string tipo,
-        string transcricao,
-        RascunhoClinicoDto registroClinico,
+        TextoSanitizado transcricao,
+        RegistroSanitizado registroClinico,
         CredenciaisIA credenciais,
         ContextoGeracao contexto,
         CancellationToken cancellationToken = default)
     {
-        var instrucao = ComContexto(InstrucaoDocumento(tipo), contexto);
+        var instrucao = ComContexto(InstrucaoDocumento(tipo) + InstrucaoMarcadores, contexto);
 
         var conteudoUsuario = $"""
             Transcricao da consulta:
 
-            {transcricao}
+            {transcricao.Valor}
 
             Registro clinico revisado ate aqui:
 

@@ -17,7 +17,7 @@ public class ConfiguracaoIA : BaseEntity
     /// <summary>Ultimos caracteres da chave, para o medico reconhecer qual esta ativa sem expo-la.</summary>
     public string ChaveApiSufixo { get; set; } = string.Empty;
 
-    public string ModeloTranscricao { get; set; } = "whisper-1";
+    public string ModeloTranscricao { get; set; } = "gpt-4o-transcribe";
     public string ModeloTexto { get; set; } = "gpt-4o";
 
     public DateTime AtualizadoEm { get; set; } = DateTime.UtcNow;

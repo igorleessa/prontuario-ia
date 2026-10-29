@@ -8,8 +8,9 @@ numa demonstracao.
 Os dados entram pelas mesmas rotas da API que o medico usa - nada de INSERT
 direto no banco - entao passam pelas regras de negocio de um atendimento real,
 inclusive a trilha de auditoria. Os atendimentos padrao sao confirmados com
-conteudo clinico ficticio escrito a mao; a opcao --com-ia usa a rota de consulta
-simulada, que chama o provedor de verdade e consome creditos.
+conteudo clinico ficticio escrito a mao; a opcao --com-ia envia as falas da
+consulta de demonstracao como trechos de transcricao e pede o rascunho ao
+provedor de verdade, o que consome creditos.
 """
 
 import json
@@ -308,10 +309,20 @@ def main():
         print()
         cinza('Rodando a IA sobre a consulta de exemplo (consome creditos da OpenAI)…')
 
+        trechos = api.chamar('GET', '/demonstracao/consulta')['trechos']
+
         for paciente_id in pacientes_criados[:2]:
             atendimento_id = abrir(paciente_id, '')
-            api.chamar('POST', f'/atendimentos/{atendimento_id}/simular', {})
-            verde('Consulta simulada enfileirada — o rascunho fica pronto em alguns segundos')
+            api.chamar('POST', f'/atendimentos/{atendimento_id}/consentimento', {})
+
+            # Mesmo caminho da consulta ao vivo: cada fala passa pela sanitizacao.
+            for sequencia, texto in enumerate(trechos):
+                api.chamar('POST', f'/atendimentos/{atendimento_id}/transcricao/trechos',
+                           {'sequencia': sequencia, 'texto': texto})
+
+            api.chamar('POST', f'/atendimentos/{atendimento_id}/transcricao/rascunho', {})
+            api.chamar('POST', f'/atendimentos/{atendimento_id}/transcricao/encerrar', {'duracaoSegundos': 512})
+            verde('Consulta de demonstracao transcrita — rascunho pronto para revisao')
 
     print()
     verde('Pronto.')

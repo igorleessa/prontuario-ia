@@ -30,15 +30,14 @@ public static class AcoesAuditoria
     public const string AtendimentoLido = "atendimento.lido";
     public const string AtendimentoListado = "atendimento.listado";
     public const string ConsentimentoRegistrado = "consentimento.registrado";
-    public const string AudioEnviado = "audio.enviado";
-    public const string ProcessamentoSolicitado = "processamento.solicitado";
+    public const string TranscricaoIniciada = "transcricao.iniciada";
+    public const string TranscricaoEncerrada = "transcricao.encerrada";
+    public const string RascunhoGerado = "rascunho.gerado";
     public const string RegistroConfirmado = "registro.confirmado";
     public const string AtendimentoCancelado = "atendimento.cancelado";
     public const string NotaExportada = "nota.exportada";
     public const string NotaBaixadaPdf = "nota.pdf";
-    public const string ConsultaSimulada = "consulta.simulada";
     public const string DocumentoGerado = "documento.gerado";
     public const string DocumentoRevisado = "documento.revisado";
     public const string ConfiguracaoAlterada = "configuracao.alterada";
-    public const string AudioExpurgado = "audio.expurgado";
 }

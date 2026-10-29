@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Prontuario.Application.Common.Interfaces;
 using Prontuario.Application.Common.Models;
+using Prontuario.Application.Privacidade;
 using Prontuario.Domain.Entities;
 using Prontuario.Domain.Enums;
 using Prontuario.Infrastructure.Persistence;
@@ -11,28 +12,25 @@ public class AtendimentoService : IAtendimentoService
 {
     private readonly ApplicationDbContext _db;
     private readonly IRegistroClinicoOutput _output;
-    private readonly IArmazenamentoAudio _armazenamento;
-    private readonly IFilaProcessamentoIA _fila;
     private readonly IExportadorNota _exportador;
     private readonly INotaClinicaFormatter _formatador;
     private readonly IAuditoriaService _auditoria;
+    private readonly ISanitizadorDados _sanitizador;
 
     public AtendimentoService(
         ApplicationDbContext db,
         IRegistroClinicoOutput output,
-        IArmazenamentoAudio armazenamento,
-        IFilaProcessamentoIA fila,
         IExportadorNota exportador,
         INotaClinicaFormatter formatador,
-        IAuditoriaService auditoria)
+        IAuditoriaService auditoria,
+        ISanitizadorDados sanitizador)
     {
         _db = db;
         _output = output;
-        _armazenamento = armazenamento;
-        _fila = fila;
         _exportador = exportador;
         _formatador = formatador;
         _auditoria = auditoria;
+        _sanitizador = sanitizador;
     }
 
     public async Task<Guid?> AbrirAsync(
@@ -80,7 +78,7 @@ public class AtendimentoService : IAtendimentoService
                 a.Medico!.Nome,
                 a.DataHora,
                 a.Status.ToString(),
-                a.ConsentimentoGravacao))
+                a.ConsentimentoTranscricao))
             .ToListAsync(cancellationToken);
 
     public async Task<AtendimentoDetalheDto?> ObterAsync(Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default)
@@ -90,13 +88,16 @@ public class AtendimentoService : IAtendimentoService
             .Include(a => a.Medico)
             .Include(a => a.Prontuario)
             .Include(a => a.TemplateNota)
-            .Include(a => a.GravacaoAudio)
+            .Include(a => a.SessaoTranscricao)
             .SingleOrDefaultAsync(a => a.Id == atendimentoId, cancellationToken);
 
         if (atendimento is null)
         {
             return null;
         }
+
+        var transcricao = await ObterTranscricaoAsync(atendimento.Id, cancellationToken);
+        var identidade = IdentidadeDoAtendimento.De(atendimento.PacienteRef!, atendimento.Medico!);
 
         await _auditoria.RegistrarAsync(AcoesAuditoria.AtendimentoLido, atendimento.Id, cancellationToken: cancellationToken);
 
@@ -109,14 +110,16 @@ public class AtendimentoService : IAtendimentoService
             atendimento.Medico!.Nome,
             atendimento.DataHora,
             atendimento.Status.ToString(),
-            atendimento.ConsentimentoGravacao,
+            atendimento.ConsentimentoTranscricao,
             atendimento.ConsentimentoEm,
             await ObterRascunhoAsync(atendimento, cancellationToken),
             await ObterSugestaoIAAsync(atendimento.Id, cancellationToken),
-            await ObterTranscricaoAsync(atendimento.Id, cancellationToken),
+            transcricao is null ? null : _sanitizador.Reidentificar(transcricao, identidade),
             atendimento.ErroProcessamentoIA,
             atendimento.TemplateNota?.Nome,
-            atendimento.GravacaoAudio?.DuracaoSegundos);
+            atendimento.SessaoTranscricao?.DuracaoSegundos,
+            transcricao is null ? 0 : IdentidadeDoAtendimento.ContarMarcadores(transcricao),
+            atendimento.PacienteRef.Contato);
     }
 
     public async Task<bool> RegistrarConsentimentoAsync(Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default)
@@ -127,9 +130,20 @@ public class AtendimentoService : IAtendimentoService
             return false;
         }
 
-        atendimento.ConsentimentoGravacao = true;
-        atendimento.ConsentimentoEm = DateTime.UtcNow;
-        atendimento.Status = StatusAtendimento.EmGravacao;
+        if (atendimento.Status is StatusAtendimento.Finalizado or StatusAtendimento.Cancelado)
+        {
+            return false;
+        }
+
+        // Retomar a consulta (outra aba, recarga da pagina) nao reescreve o
+        // horario do aceite ja registrado.
+        if (!atendimento.ConsentimentoTranscricao)
+        {
+            atendimento.ConsentimentoTranscricao = true;
+            atendimento.ConsentimentoEm = DateTime.UtcNow;
+        }
+
+        atendimento.Status = StatusAtendimento.EmConsulta;
 
         await _db.SaveChangesAsync(cancellationToken);
         await _auditoria.RegistrarAsync(
@@ -141,55 +155,13 @@ public class AtendimentoService : IAtendimentoService
     public async Task<bool> IniciarRevisaoAsync(Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default)
     {
         var atendimento = await BuscarAsync(atendimentoId, clinicaId, cancellationToken);
-        if (atendimento is null)
+        if (atendimento is null || atendimento.Status is StatusAtendimento.Finalizado or StatusAtendimento.Cancelado)
         {
             return false;
         }
 
         atendimento.Status = StatusAtendimento.EmRevisao;
         await _db.SaveChangesAsync(cancellationToken);
-        return true;
-    }
-
-    public async Task<bool> RegistrarAudioAsync(
-        Guid atendimentoId, Guid clinicaId, Stream audio, string tipoConteudo, int duracaoSegundos,
-        CancellationToken cancellationToken = default)
-    {
-        var atendimento = await DaClinica(clinicaId)
-            .Include(a => a.GravacaoAudio)
-            .SingleOrDefaultAsync(a => a.Id == atendimentoId, cancellationToken);
-
-        if (atendimento is null)
-        {
-            return false;
-        }
-
-        var chave = await _armazenamento.SalvarAsync(atendimentoId, audio, tipoConteudo, cancellationToken);
-
-        // Regravar substitui o audio anterior: o atendimento tem uma gravacao so.
-        if (atendimento.GravacaoAudio is { } existente)
-        {
-            existente.StoragePath = chave;
-            existente.DuracaoSegundos = duracaoSegundos;
-        }
-        else
-        {
-            _db.GravacoesAudio.Add(new GravacaoAudio
-            {
-                AtendimentoId = atendimentoId,
-                StoragePath = chave,
-                DuracaoSegundos = duracaoSegundos,
-            });
-        }
-
-        atendimento.Status = StatusAtendimento.ProcessandoIA;
-        atendimento.ErroProcessamentoIA = null;
-        await _db.SaveChangesAsync(cancellationToken);
-
-        await _auditoria.RegistrarAsync(
-            AcoesAuditoria.AudioEnviado, atendimentoId, $"{duracaoSegundos}s", cancellationToken);
-
-        await _fila.EnfileirarAsync(atendimentoId, cancellationToken);
         return true;
     }
 
@@ -218,84 +190,6 @@ public class AtendimentoService : IAtendimentoService
         await _auditoria.RegistrarAsync(
             AcoesAuditoria.RegistroConfirmado, atendimentoId, cancellationToken: cancellationToken);
 
-        return ResultadoAtendimento.Ok;
-    }
-
-    public async Task<ResultadoAtendimento> SimularConsultaAsync(
-        Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default)
-    {
-        var atendimento = await DaClinica(clinicaId)
-            .Include(a => a.GravacaoAudio)
-            .SingleOrDefaultAsync(a => a.Id == atendimentoId, cancellationToken);
-
-        if (atendimento is null)
-        {
-            return ResultadoAtendimento.NaoEncontrado;
-        }
-
-        if (atendimento.Status is StatusAtendimento.Finalizado or StatusAtendimento.Cancelado)
-        {
-            return ResultadoAtendimento.Conflito;
-        }
-
-        var chave = ConsultaExemplo.PrefixoStorage + atendimentoId;
-
-        if (atendimento.GravacaoAudio is { } existente)
-        {
-            existente.StoragePath = chave;
-            existente.DuracaoSegundos = ConsultaExemplo.DuracaoSegundos;
-        }
-        else
-        {
-            _db.GravacoesAudio.Add(new GravacaoAudio
-            {
-                AtendimentoId = atendimentoId,
-                StoragePath = chave,
-                DuracaoSegundos = ConsultaExemplo.DuracaoSegundos,
-            });
-        }
-
-        atendimento.ConsentimentoGravacao = true;
-        atendimento.ConsentimentoEm ??= DateTime.UtcNow;
-        atendimento.Status = StatusAtendimento.ProcessandoIA;
-        atendimento.ErroProcessamentoIA = null;
-        await _db.SaveChangesAsync(cancellationToken);
-
-        await _auditoria.RegistrarAsync(
-            AcoesAuditoria.ConsultaSimulada, atendimentoId, cancellationToken: cancellationToken);
-
-        await _fila.EnfileirarAsync(atendimentoId, cancellationToken);
-        return ResultadoAtendimento.Ok;
-    }
-
-    public async Task<ResultadoAtendimento> ReprocessarAsync(
-        Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default)
-    {
-        var atendimento = await DaClinica(clinicaId)
-            .Include(a => a.GravacaoAudio)
-            .SingleOrDefaultAsync(a => a.Id == atendimentoId, cancellationToken);
-
-        if (atendimento is null)
-        {
-            return ResultadoAtendimento.NaoEncontrado;
-        }
-
-        // Sem audio nao ha o que reprocessar, e um registro encerrado nao volta
-        // atras - a IA nao pode mexer no que ja foi assinado ou exportado.
-        if (atendimento.GravacaoAudio is null
-            || atendimento.Status is StatusAtendimento.Finalizado or StatusAtendimento.Cancelado)
-        {
-            return ResultadoAtendimento.Conflito;
-        }
-
-        atendimento.Status = StatusAtendimento.ProcessandoIA;
-        atendimento.ErroProcessamentoIA = null;
-        await _db.SaveChangesAsync(cancellationToken);
-
-        await _auditoria.RegistrarAsync(
-            AcoesAuditoria.ProcessamentoSolicitado, atendimentoId, cancellationToken: cancellationToken);
-
-        await _fila.EnfileirarAsync(atendimentoId, cancellationToken);
         return ResultadoAtendimento.Ok;
     }
 
@@ -419,7 +313,7 @@ public class AtendimentoService : IAtendimentoService
     private async Task<RascunhoClinicoDto?> ObterSugestaoIAAsync(Guid atendimentoId, CancellationToken cancellationToken)
     {
         var rascunho = await _db.RascunhosIA
-            .Where(r => r.Transcricao!.GravacaoAudio!.AtendimentoId == atendimentoId)
+            .Where(r => r.Transcricao!.SessaoTranscricao!.AtendimentoId == atendimentoId)
             .OrderByDescending(r => r.CriadoEm)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -437,8 +331,9 @@ public class AtendimentoService : IAtendimentoService
             .Where(a => a.Status == StatusAtendimento.Finalizado)
             .Select(a => new
             {
-                Duracao = a.GravacaoAudio != null ? a.GravacaoAudio.DuracaoSegundos : 0,
-                InicioRevisao = a.GravacaoAudio != null ? (DateTime?)a.GravacaoAudio.CriadoEm : null,
+                Duracao = a.SessaoTranscricao != null ? a.SessaoTranscricao.DuracaoSegundos : 0,
+                // A revisao comeca quando a escuta termina.
+                InicioRevisao = a.SessaoTranscricao != null ? a.SessaoTranscricao.EncerradaEm : null,
                 // O fim da revisao e a assinatura (Modalidade A) ou a revisao da
                 // nota (Modalidade B) - so uma das duas existe por atendimento.
                 Confirmacao = a.Prontuario != null ? a.Prontuario.AssinadoEm
@@ -470,7 +365,7 @@ public class AtendimentoService : IAtendimentoService
 
     private Task<string?> ObterTranscricaoAsync(Guid atendimentoId, CancellationToken cancellationToken)
         => _db.Transcricoes
-            .Where(t => t.GravacaoAudio!.AtendimentoId == atendimentoId)
+            .Where(t => t.SessaoTranscricao!.AtendimentoId == atendimentoId)
             .OrderByDescending(t => t.CriadoEm)
             .Select(t => (string?)t.Texto)
             .FirstOrDefaultAsync(cancellationToken);
@@ -489,7 +384,7 @@ public class AtendimentoService : IAtendimentoService
         }
 
         var rascunhoIa = await _db.RascunhosIA
-            .Where(r => r.Transcricao!.GravacaoAudio!.AtendimentoId == atendimento.Id)
+            .Where(r => r.Transcricao!.SessaoTranscricao!.AtendimentoId == atendimento.Id)
             .OrderByDescending(r => r.CriadoEm)
             .FirstOrDefaultAsync(cancellationToken);
 

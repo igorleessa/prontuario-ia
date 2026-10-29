@@ -2,18 +2,40 @@ namespace Prontuario.Infrastructure.Services;
 
 /// <summary>
 /// Consulta ficticia usada no modo demonstracao. Existe para que a apresentacao
-/// ao cliente nao dependa de microfone, de permissao do navegador nem da
-/// latencia do provedor de IA - tres coisas que costumam falhar justamente na
-/// frente de quem se quer convencer. O texto e inventado; nenhum dado real de
-/// paciente entra aqui.
+/// ao cliente nao dependa de microfone nem de permissao do navegador - coisas
+/// que costumam falhar justamente na frente de quem se quer convencer. A tela
+/// envia as falas uma a uma, como se viessem do provedor de transcricao, e o
+/// resto do fluxo (sanitizacao, preenchimento ao vivo, revisao) e o real.
+/// O texto e inventado; nenhum dado real de paciente entra aqui. O telefone e o
+/// CPF ditos na consulta existem para mostrar a sanitizacao funcionando.
 /// </summary>
 public static class ConsultaExemplo
 {
-    /// <summary>Prefixo da chave de storage que marca uma gravacao simulada.</summary>
-    public const string PrefixoStorage = "demonstracao:";
+    /// <summary>
+    /// Falas na ordem da consulta, sem a indicacao de quem fala - o provedor de
+    /// transcricao tambem nao a entrega.
+    /// </summary>
+    public static IReadOnlyList<string> Trechos()
+    {
+        var falas = new List<string>();
 
-    /// <summary>Duracao aproximada da consulta simulada, em segundos.</summary>
-    public const int DuracaoSegundos = 512;
+        foreach (var linha in Transcricao.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            var separador = linha.IndexOf(':');
+            var abreFala = separador > 0 && linha[..separador] is "Medica" or "Paciente";
+
+            if (abreFala || falas.Count == 0)
+            {
+                falas.Add(abreFala ? linha[(separador + 1)..].Trim() : linha);
+            }
+            else
+            {
+                falas[^1] += " " + linha;
+            }
+        }
+
+        return falas;
+    }
 
     public const string Transcricao = """
         Medica: Bom dia, dona Helena, pode sentar. O que a trouxe hoje?
@@ -48,6 +70,9 @@ public static class ConsultaExemplo
         Medica: Se em setenta e duas horas a febre nao ceder, ou se aparecer falta de ar, volte
         antes. Vou pedir um hemograma e uma radiografia de torax para a gente conferir.
         Paciente: Esta bem, doutora. Preciso de atestado de dois dias para o trabalho.
-        Medica: Claro, vou fazer o atestado de dois dias. Retorno em uma semana com os exames.
+        Medica: Claro, vou fazer o atestado de dois dias. Qual o seu CPF para o atestado?
+        Paciente: E 529.982.247-25. Se precisar me ligar, meu celular e 11 98765-4321, ou fala com a
+        minha filha Mariana.
+        Medica: Anotado. Retorno em uma semana com os exames.
         """;
 }
