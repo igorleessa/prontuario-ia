@@ -5,7 +5,11 @@ using Prontuario.Application.Common.Interfaces;
 
 namespace Prontuario.Infrastructure.Services;
 
-/// <summary>Transcricao via Whisper API da OpenAI (RF07).</summary>
+/// <summary>
+/// Transcricao de trechos curtos via API de transcricao da OpenAI (RF07), no
+/// modo alternativo ao tempo real. O audio chega em memoria, e enviado e
+/// descartado: nada e escrito em disco ou storage.
+/// </summary>
 public class OpenAiTranscriptionService : ITranscriptionService
 {
     /// <summary>Limite de upload da API de transcricao da OpenAI.</summary>
@@ -41,13 +45,13 @@ public class OpenAiTranscriptionService : ITranscriptionService
 
         if (bytes.Length == 0)
         {
-            throw new InvalidOperationException("A gravacao chegou vazia: verifique o microfone e grave de novo.");
+            return string.Empty;
         }
 
         if (bytes.Length > TamanhoMaximoBytes)
         {
             throw new InvalidOperationException(
-                $"A gravacao tem {bytes.Length / (1024 * 1024)} MB, acima do limite de 25 MB do provedor de transcricao.");
+                $"O trecho tem {bytes.Length / (1024 * 1024)} MB, acima do limite de 25 MB do provedor de transcricao.");
         }
 
         var formato = FormatoAudio.Detectar(bytes);
@@ -86,14 +90,32 @@ public class OpenAiTranscriptionService : ITranscriptionService
         using var json = JsonDocument.Parse(corpo);
         var texto = json.RootElement.GetProperty("text").GetString()?.Trim() ?? string.Empty;
 
-        if (texto.Length == 0)
-        {
-            throw new InvalidOperationException(
-                "Nenhuma fala foi reconhecida na gravacao. Verifique o microfone e grave de novo.");
-        }
-
-        return texto;
+        return EhAlucinacaoDeSilencio(texto) ? string.Empty : texto;
     }
+
+    /// <summary>
+    /// Em trecho sem fala o modelo as vezes devolve frases tipicas de legenda de
+    /// video, aprendidas no treino. Elas nao podem entrar no prontuario.
+    /// </summary>
+    internal static bool EhAlucinacaoDeSilencio(string texto)
+    {
+        var normalizado = texto.Trim().TrimEnd('.', '!', ' ').ToLowerInvariant();
+
+        return normalizado.Length == 0
+            || AlucinacoesConhecidas.Any(frase => normalizado.Contains(frase, StringComparison.Ordinal));
+    }
+
+    private static readonly string[] AlucinacoesConhecidas =
+    [
+        "legendas pela comunidade amara.org",
+        "legenda adriana zanotto",
+        "obrigado por assistir",
+        "obrigada por assistir",
+        "inscreva-se no canal",
+        "se inscreva no canal",
+        "ative o sininho",
+        "e aí, pessoal",
+    ];
 
     private static async Task<byte[]> LerAsync(Stream audio, CancellationToken cancellationToken)
     {

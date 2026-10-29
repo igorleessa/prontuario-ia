@@ -8,7 +8,7 @@ public sealed record AtendimentoResumoDto(
     string MedicoNome,
     DateTime DataHora,
     string Status,
-    bool ConsentimentoGravacao);
+    bool ConsentimentoTranscricao);
 
 /// <summary>
 /// Atendimento aberto na tela de acompanhamento. <paramref name="Rascunho"/> traz o
@@ -24,7 +24,7 @@ public sealed record AtendimentoDetalheDto(
     string MedicoNome,
     DateTime DataHora,
     string Status,
-    bool ConsentimentoGravacao,
+    bool ConsentimentoTranscricao,
     DateTime? ConsentimentoEm,
     RascunhoClinicoDto Rascunho,
     /// <summary>
@@ -33,10 +33,21 @@ public sealed record AtendimentoDetalheDto(
     /// a revisao humana deixa de ser promessa e vira evidencia.
     /// </summary>
     RascunhoClinicoDto? SugestaoIA,
+    /// <summary>
+    /// Transcricao para exibicao: dados do paciente devolvidos a partir do
+    /// cadastro, os de terceiros ainda como marcador ([PESSOA], [TELEFONE]).
+    /// </summary>
     string? Transcricao,
     string? ErroProcessamentoIA,
     string? TemplateNome,
-    int? DuracaoGravacaoSegundos);
+    int? DuracaoTranscricaoSegundos,
+    /// <summary>Quantos dados pessoais a sanitizacao retirou da transcricao.</summary>
+    int DadosPessoaisProtegidos,
+    string? PacienteContato,
+    /// <summary>Trechos da transcricao, para exibicao, com a sequencia citada pelas origens.</summary>
+    IReadOnlyList<TrechoRegistradoDto> Trechos,
+    /// <summary>De quais trechos a IA tirou cada campo do rascunho.</summary>
+    IReadOnlyDictionary<string, IReadOnlyList<int>> OrigensIA);
 
 /// <summary>
 /// Numeros da clinica para a tela de atendimentos. O tempo economizado e uma

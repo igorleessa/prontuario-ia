@@ -1,137 +1,148 @@
 <div class="pagina">
-  <div class="pagina__topo">
-    <div>
-      <h1>Atendimentos</h1>
-      <p class="pagina__subtitulo">
-        @if (emAndamento() === 1) {
-          1 atendimento em andamento
+  <div class="pagina-topo">
+    <div class="pagina-topo__titulo">
+      <span class="pagina-topo__sobretitulo">
+        <app-icone nome="agenda" [tamanho]="14" /> {{ hoje | date: "EEEE, d 'de' MMMM" }}
+      </span>
+      <h1>{{ saudacao() }}</h1>
+      <p class="pagina-topo__subtitulo">
+        @if (emAndamento().length === 0) {
+          Nenhum atendimento em aberto. Comece uma nova consulta quando o paciente entrar.
         } @else {
-          {{ emAndamento() }} atendimentos em andamento
+          {{ emAndamento().length }} {{ emAndamento().length === 1 ? 'atendimento em aberto' : 'atendimentos em aberto' }}
+          @if (aguardandoRevisao() > 0) { · {{ aguardandoRevisao() }} aguardando a sua revisão }
         }
       </p>
     </div>
 
-    <a class="botao" routerLink="/atendimentos/novo">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-           stroke-linecap="round" width="16" height="16" aria-hidden="true">
-        <path d="M12 5v14M5 12h14" />
-      </svg>
-      Novo atendimento
+    <a class="botao botao--grande" routerLink="/atendimentos/novo">
+      <app-icone nome="nova-consulta" /> Nova consulta
     </a>
   </div>
 
   @if (erro()) {
-    <p class="aviso aviso--erro" role="alert">{{ erro() }}</p>
+    <p class="aviso aviso--erro" role="alert"><app-icone nome="alerta" [tamanho]="16" /> {{ erro() }}</p>
   }
 
-  @if (metricas(); as m) {
-    @if (m.atendimentosFinalizados > 0) {
-      <div class="indicadores">
-        <div class="indicador">
-          <span class="indicador__valor">{{ m.atendimentosFinalizados }}</span>
-          <span class="indicador__rotulo">atendimentos documentados</span>
-        </div>
-
-        <div class="indicador">
-          <span class="indicador__valor">{{ m.minutosDeConsultaDocumentados }} min</span>
-          <span class="indicador__rotulo">de consulta transcritos</span>
-        </div>
-
-        @if (tempoMedioFormatado(); as tempo) {
-          <div class="indicador">
-            <span class="indicador__valor">{{ tempo }}</span>
-            <span class="indicador__rotulo">
-              da gravação à confirmação, em média
-            </span>
-          </div>
-        }
-
-        @if (m.economiaPercentualEstimada !== null) {
-          <div class="indicador indicador--destaque">
-            <span class="indicador__valor">{{ m.economiaPercentualEstimada }}%</span>
-            <span class="indicador__rotulo">
-              menos tempo que os {{ m.minutosDocumentacaoManualEstimados }} min estimados de
-              digitação manual
-            </span>
-          </div>
-        }
+  <div class="indicadores">
+    <div class="indicador cartao">
+      <span class="indicador__icone indicador__icone--vivo"><app-icone nome="escuta" /></span>
+      <div>
+        <span class="indicador__valor numero">{{ emConsultaAgora() }}</span>
+        <span class="indicador__rotulo">em consulta agora</span>
       </div>
-    }
-  }
-
-  <div class="filtros">
-    <div class="abas" role="tablist">
-      <button type="button" role="tab" [attr.aria-selected]="aba() === 'emAndamento'"
-              [class.abas__item--ativa]="aba() === 'emAndamento'" class="abas__item"
-              (click)="aba.set('emAndamento')">Em andamento</button>
-      <button type="button" role="tab" [attr.aria-selected]="aba() === 'finalizados'"
-              [class.abas__item--ativa]="aba() === 'finalizados'" class="abas__item"
-              (click)="aba.set('finalizados')">Encerrados</button>
-      <button type="button" role="tab" [attr.aria-selected]="aba() === 'todos'"
-              [class.abas__item--ativa]="aba() === 'todos'" class="abas__item"
-              (click)="aba.set('todos')">Todos</button>
     </div>
 
-    <div class="campo busca">
-      <label class="visualmente-oculto" for="busca">Buscar por paciente ou médico</label>
-      <input id="busca" type="search" placeholder="Buscar paciente ou médico…"
-             [ngModel]="busca()" (ngModelChange)="busca.set($event)" />
+    <div class="indicador cartao">
+      <span class="indicador__icone indicador__icone--revisao"><app-icone nome="caneta" /></span>
+      <div>
+        <span class="indicador__valor numero">{{ aguardandoRevisao() }}</span>
+        <span class="indicador__rotulo">aguardando revisão</span>
+      </div>
+    </div>
+
+    <div class="indicador cartao">
+      <span class="indicador__icone"><app-icone nome="verificado" /></span>
+      <div>
+        <span class="indicador__valor numero">{{ metricas()?.atendimentosFinalizados ?? 0 }}</span>
+        <span class="indicador__rotulo">
+          registros assinados
+          @if (metricas()?.minutosDeConsultaDocumentados) {
+            · {{ metricas()?.minutosDeConsultaDocumentados }} min transcritos
+          }
+        </span>
+      </div>
+    </div>
+
+    <div class="indicador cartao indicador--destaque">
+      <span class="indicador__icone"><app-icone nome="cronometro" /></span>
+      <div>
+        @if (metricas()?.economiaPercentualEstimada != null) {
+          <span class="indicador__valor numero">{{ metricas()?.economiaPercentualEstimada }}%</span>
+          <span class="indicador__rotulo">
+            menos tempo de documentação
+            @if (tempoMedioFormatado(); as tempo) { · revisão média de {{ tempo }} }
+          </span>
+        } @else {
+          <span class="indicador__valor">—</span>
+          <span class="indicador__rotulo">tempo economizado aparece após o primeiro registro</span>
+        }
+      </div>
     </div>
   </div>
 
-  @if (carregando()) {
-    <div class="cartao">
-      <div class="vazio">Carregando atendimentos…</div>
+  <section class="cartao">
+    <div class="filtros">
+      <div class="abas" role="tablist">
+        <button type="button" role="tab" class="abas__item" [class.abas__item--ativa]="aba() === 'emAndamento'"
+                [attr.aria-selected]="aba() === 'emAndamento'" (click)="aba.set('emAndamento')">
+          Em aberto <span class="abas__contador">{{ emAndamento().length }}</span>
+        </button>
+        <button type="button" role="tab" class="abas__item" [class.abas__item--ativa]="aba() === 'finalizados'"
+                [attr.aria-selected]="aba() === 'finalizados'" (click)="aba.set('finalizados')">
+          Encerrados <span class="abas__contador">{{ encerrados() }}</span>
+        </button>
+        <button type="button" role="tab" class="abas__item" [class.abas__item--ativa]="aba() === 'todos'"
+                [attr.aria-selected]="aba() === 'todos'" (click)="aba.set('todos')">
+          Todos
+        </button>
+      </div>
+
+      <div class="campo busca">
+        <label class="visualmente-oculto" for="busca">Buscar por paciente ou médico</label>
+        <app-icone nome="buscar" [tamanho]="16" />
+        <input id="busca" type="search" placeholder="Buscar paciente ou médico…"
+               [ngModel]="busca()" (ngModelChange)="busca.set($event)" />
+      </div>
     </div>
-  } @else if (filtrados().length === 0) {
-    <div class="cartao">
+
+    @if (carregando()) {
+      <div class="vazio"><span class="giro"></span> Carregando atendimentos…</div>
+    } @else if (filtrados().length === 0) {
       <div class="vazio">
+        <span class="vazio__icone"><app-icone nome="prontuario" /></span>
         <span class="vazio__titulo">
-          @if (lista().length === 0) {
-            Nenhum atendimento registrado
-          } @else {
-            Nenhum atendimento neste filtro
-          }
+          {{ lista().length === 0 ? 'Nenhum atendimento registrado' : 'Nenhum atendimento neste filtro' }}
         </span>
         @if (lista().length === 0) {
-          <p>Abra o primeiro atendimento para começar a documentar a consulta.</p>
-          <a class="botao" routerLink="/atendimentos/novo">Novo atendimento</a>
+          <p>Abra a primeira consulta para começar a documentar com a IA.</p>
+          <a class="botao" routerLink="/atendimentos/novo"><app-icone nome="nova-consulta" [tamanho]="16" /> Nova consulta</a>
         } @else {
           <p>Ajuste a busca ou escolha outra aba.</p>
         }
       </div>
-    </div>
-  } @else {
-    <ul class="lista">
-      @for (atendimento of filtrados(); track atendimento.id) {
-        <li>
-          <a class="item" [routerLink]="['/atendimentos', atendimento.id]">
-            <span class="item__paciente">
-              <strong>{{ atendimento.pacienteNome }}</strong>
-              <small>{{ atendimento.medicoNome }}</small>
-            </span>
+    } @else {
+      <ul class="lista">
+        @for (atendimento of filtrados(); track atendimento.id) {
+          <li>
+            <a class="linha" [routerLink]="['/atendimentos', atendimento.id]">
+              <app-avatar [nome]="atendimento.pacienteNome" />
 
-            <span class="item__data">
-              {{ atendimento.dataHora | date: "dd 'de' MMM, HH:mm" }}
-            </span>
+              <span class="linha__paciente">
+                <strong>{{ atendimento.pacienteNome }}</strong>
+                <small><app-icone nome="estetoscopio" [tamanho]="12" /> {{ atendimento.medicoNome }}</small>
+              </span>
 
-            <span class="selo selo--{{ classeStatus[atendimento.status] }}">
-              {{ rotuloStatus[atendimento.status] }}
-            </span>
+              <span class="linha__data">
+                <strong class="numero">{{ atendimento.dataHora | date: 'HH:mm' }}</strong>
+                <small>{{ atendimento.dataHora | date: "dd 'de' MMM" }}</small>
+              </span>
 
-            <span class="item__acoes">
-              @if (cancelavel(atendimento)) {
-                <button type="button" class="botao botao--discreto item__cancelar"
-                        (click)="cancelar(atendimento, $event)">Cancelar</button>
-              }
-              <svg class="item__seta" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="m9 18 6-6-6-6" />
-              </svg>
-            </span>
-          </a>
-        </li>
-      }
-    </ul>
-  }
+              <span class="linha__status">
+                <span class="selo selo--{{ classeStatus[atendimento.status] }}">{{ rotuloStatus[atendimento.status] }}</span>
+              </span>
+
+              <span class="linha__acoes">
+                @if (cancelavel(atendimento)) {
+                  <button type="button" class="botao botao--discreto botao--pequeno linha__cancelar"
+                          (click)="cancelar(atendimento, $event)">Cancelar</button>
+                }
+                <span class="linha__ir">{{ acao(atendimento) }} <app-icone nome="avancar" [tamanho]="16" /></span>
+              </span>
+            </a>
+          </li>
+        }
+      </ul>
+    }
+  </section>
 </div>

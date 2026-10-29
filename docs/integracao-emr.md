@@ -7,7 +7,7 @@ clínica, o médico revisa, e a nota volta para o EMR de origem.
 ```
 EMR do cliente  ──(1) abre atendimento por API──►  Prontuário IA
                                                      │
-                                          médico grava, IA transcreve,
+                                    consulta transcrita ao vivo, sem gravação,
                                               médico revisa e confirma
                                                      │
 EMR do cliente  ◄──(2) webhook assinado com a nota ──┘
@@ -53,7 +53,7 @@ Content-Type: application/json
 | `medicoEmail` | não | Sem ele, o atendimento vai para o primeiro médico da clínica. |
 
 O EMR abre `url` em nova aba (ou iframe) e o médico segue o fluxo de consentimento,
-gravação e revisão. Nenhum dado clínico é devolvido por esta rota.
+consulta e revisão. Nenhum dado clínico é devolvido por esta rota.
 
 Para validar a chave na implantação, sem criar nada: `GET /api/integracao/ping`.
 

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\Prontuario.Application\Prontuario.Application.csproj" />
@@ -6,7 +6,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="AWSSDK.S3" Version="3.7.402" />
     <PackageReference Include="Microsoft.AspNetCore.DataProtection" Version="8.0.11" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.11" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.11" />
@@ -26,7 +25,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- O worker de IA e testado pelo metodo de processamento, sem passar pela fila. -->
+    <!-- Os testes exercitam utilitarios internos (normalizacao do CID, filtro de alucinacao). -->
     <InternalsVisibleTo Include="Prontuario.Application.Tests" />
   </ItemGroup>
 

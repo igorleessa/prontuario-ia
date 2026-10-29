@@ -82,9 +82,10 @@ app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
 
 // Capacidades que a interface precisa conhecer antes do login. Nao carrega
 // nenhum dado de clinica nem de paciente.
-app.MapGet("/api/configuracao-app", (IConfiguration configuracao) => Results.Ok(new
+app.MapGet("/api/configuracao-app", (IConfiguration configuracao, ISanitizadorDados sanitizador) => Results.Ok(new
 {
     demonstracao = configuracao.GetValue<bool>("Demonstracao:Habilitado"),
+    reconhecimentoNomes = sanitizador.ReconhecimentoHabilitado,
 }));
 
 app.Run();

@@ -1,19 +1,52 @@
 <div class="login">
-  <div class="login__cartao cartao">
-    <div class="cartao__corpo">
-      <span class="login__simbolo" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 12h3l2.5 6 4-14L15 12h6" />
-        </svg>
-      </span>
+  <section class="vitrine" aria-hidden="true">
+    <div class="vitrine__marca">
+      <span class="vitrine__simbolo"><app-icone nome="estetoscopio" [tamanho]="22" /></span>
+      <strong>Prontuário IA</strong>
+    </div>
 
-      <h1>Prontuário IA</h1>
-      <p class="login__subtitulo">Entre para registrar e revisar seus atendimentos.</p>
+    <div class="vitrine__texto">
+      <h2>Converse com o paciente.<br />O prontuário se escreve sozinho.</h2>
+      <p>
+        A consulta é transcrita enquanto acontece e os campos clínicos se preenchem na tela.
+        Você só revisa e assina.
+      </p>
+    </div>
+
+    <div class="vitrine__demo">
+      <div class="vitrine__linha"><span class="vitrine__ponto"></span> Ouvindo a consulta · 04:12</div>
+      <div class="vitrine__campo">
+        <small>Queixa principal <em>IA</em></small>
+        <p>Tosse produtiva e odinofagia há 4 dias.</p>
+      </div>
+      <div class="vitrine__campo">
+        <small>Exame físico <em>IA</em></small>
+        <p>PA 130x80 mmHg, Tax 37,2 °C, SpO2 97%. Roncos difusos.</p>
+      </div>
+    </div>
+
+    <ul class="vitrine__garantias">
+      <li><app-icone nome="microfone-desligado" [tamanho]="16" /> Sem gravação de áudio</li>
+      <li><app-icone nome="privacidade" [tamanho]="16" /> Dados pessoais protegidos antes da IA</li>
+      <li><app-icone nome="auditoria" [tamanho]="16" /> Trilha de auditoria completa (LGPD)</li>
+    </ul>
+  </section>
+
+  <section class="acesso">
+    <div class="acesso__caixa">
+      <div class="acesso__marca-movel">
+        <span class="vitrine__simbolo"><app-icone nome="estetoscopio" [tamanho]="20" /></span>
+        <strong>Prontuário IA</strong>
+      </div>
+
+      <div class="acesso__titulo">
+        <h1>Entrar</h1>
+        <p>Acesse para registrar e revisar seus atendimentos.</p>
+      </div>
 
       <form [formGroup]="form" (ngSubmit)="entrar()" novalidate>
         <div class="campo">
-          <label class="campo__rotulo" for="email">E-mail</label>
+          <label class="campo__rotulo" for="email">E-mail profissional</label>
           <input id="email" type="email" formControlName="email" autocomplete="username"
                  placeholder="voce@clinica.com.br" />
         </div>
@@ -25,13 +58,17 @@
         </div>
 
         @if (erro()) {
-          <p class="aviso aviso--erro" role="alert">{{ erro() }}</p>
+          <p class="aviso aviso--erro" role="alert"><app-icone nome="alerta" [tamanho]="16" /> {{ erro() }}</p>
         }
 
-        <button type="submit" class="botao botao--bloco" [disabled]="form.invalid || enviando()">
-          {{ enviando() ? 'Entrando…' : 'Entrar' }}
+        <button type="submit" class="botao botao--grande botao--bloco" [disabled]="form.invalid || enviando()">
+          @if (enviando()) { <span class="giro"></span> Entrando… } @else { Entrar <app-icone nome="avancar" /> }
         </button>
       </form>
+
+      <p class="acesso__rodape">
+        <app-icone nome="cadeado" [tamanho]="13" /> Acesso restrito a profissionais da clínica.
+      </p>
     </div>
-  </div>
+  </section>
 </div>

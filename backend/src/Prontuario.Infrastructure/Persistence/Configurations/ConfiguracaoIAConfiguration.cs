@@ -11,6 +11,7 @@ public class ConfiguracaoIAConfiguration : IEntityTypeConfiguration<Configuracao
         builder.Property(c => c.ChaveApiProtegida).IsRequired();
         builder.Property(c => c.ChaveApiSufixo).IsRequired().HasMaxLength(8);
         builder.Property(c => c.ModeloTranscricao).IsRequired().HasMaxLength(100);
+        builder.Property(c => c.ModeloTextoAoVivo).IsRequired().HasMaxLength(100);
         builder.Property(c => c.ModeloTexto).IsRequired().HasMaxLength(100);
 
         // Uma configuracao por clinica.

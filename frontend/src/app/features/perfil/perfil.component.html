@@ -1,66 +1,72 @@
 <div class="pagina">
-  <a class="voltar" routerLink="/atendimentos">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-         stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
-      <path d="m15 18-6-6 6-6" />
-    </svg>
-    Atendimentos
-  </a>
-
-  <div>
-    <h1>Meu perfil</h1>
-    <p class="pagina__subtitulo">
-      Como a IA deve escrever as suas notas. Vale só para você — não muda nada para os outros
-      profissionais da clínica.
-    </p>
+  <div class="pagina-topo">
+    <div class="pagina-topo__titulo">
+      <span class="pagina-topo__sobretitulo"><app-icone nome="paciente" [tamanho]="14" /> Meu perfil</span>
+      <h1>Como a IA escreve as suas notas</h1>
+      <p class="pagina-topo__subtitulo">
+        Preferências de redação que valem só para você — não mudam nada para os outros profissionais da clínica.
+      </p>
+    </div>
   </div>
 
   @if (erro()) {
-    <p class="aviso aviso--erro" role="alert">{{ erro() }}</p>
+    <p class="aviso aviso--erro" role="alert"><app-icone nome="alerta" [tamanho]="16" /> {{ erro() }}</p>
   }
   @if (sucesso()) {
-    <p class="aviso aviso--sucesso" role="status">{{ sucesso() }}</p>
+    <p class="aviso aviso--sucesso" role="status"><app-icone nome="concluido" [tamanho]="16" /> {{ sucesso() }}</p>
   }
 
-  <div class="cartao">
-    <div class="cartao__corpo">
-      @if (carregando()) {
-        <div class="vazio">Carregando…</div>
-      } @else {
-        @if (perfil(); as p) {
-          <div class="identificacao">
-            <strong>{{ p.nome }}</strong>
-            <small>{{ p.email }}</small>
-          </div>
-        }
+  <div class="grade">
+    <section class="cartao">
+      <div class="cartao__topo">
+        <div class="cartao__titulo">
+          <span class="cartao__titulo-icone"><app-icone nome="caneta" [tamanho]="16" /></span>
+          <h2>Preferências de redação</h2>
+        </div>
+      </div>
 
-        <form [formGroup]="form" (ngSubmit)="salvar()" novalidate>
-          <div class="campo">
-            <label class="campo__rotulo" for="estilo">Preferências de redação</label>
-            <textarea id="estilo" formControlName="instrucoesEstilo" rows="7"
-                      placeholder="Uma preferência por linha."></textarea>
-            <span class="campo__dica">
-              Entram como orientação no prompt, abaixo das regras fixas: a IA continua proibida de
-              registrar o que a consulta não disse.
-            </span>
-          </div>
+      <div class="cartao__corpo">
+        @if (carregando()) {
+          <div class="vazio"><span class="giro"></span> Carregando…</div>
+        } @else {
+          <form [formGroup]="form" (ngSubmit)="salvar()" novalidate>
+            <div class="campo">
+              <label class="campo__rotulo" for="estilo">Uma preferência por linha</label>
+              <textarea id="estilo" formControlName="instrucoesEstilo" rows="8"
+                        placeholder="Ex.: HDA em parágrafo único, sem tópicos."></textarea>
+              <span class="campo__dica">
+                Entram como orientação abaixo das regras fixas: a IA continua proibida de registrar o que a consulta não disse.
+              </span>
+            </div>
 
-          <div class="exemplos">
-            <span class="exemplos__rotulo">Exemplos:</span>
-            @for (exemplo of exemplos; track exemplo) {
-              <button type="button" class="exemplo" (click)="aplicarExemplo(exemplo)">
-                {{ exemplo }}
+            <div class="exemplos">
+              <span class="exemplos__rotulo"><app-icone nome="ia" [tamanho]="13" /> Sugestões</span>
+              @for (exemplo of exemplos; track exemplo) {
+                <button type="button" class="exemplo" (click)="aplicarExemplo(exemplo)">
+                  <app-icone nome="mais" [tamanho]="13" /> {{ exemplo }}
+                </button>
+              }
+            </div>
+
+            <div class="acoes">
+              <button type="submit" class="botao" [disabled]="salvando()">
+                @if (salvando()) { <span class="giro"></span> Salvando… } @else { <app-icone nome="check" [tamanho]="16" /> Salvar preferências }
               </button>
-            }
-          </div>
+            </div>
+          </form>
+        }
+      </div>
+    </section>
 
-          <div class="acoes">
-            <button type="submit" class="botao" [disabled]="salvando()">
-              {{ salvando() ? 'Salvando…' : 'Salvar preferências' }}
-            </button>
-          </div>
-        </form>
-      }
-    </div>
+    @if (perfil(); as p) {
+      <aside class="cartao identificacao">
+        <app-avatar [nome]="p.nome" [tamanho]="4" />
+        <strong>{{ p.nome }}</strong>
+        <small><app-icone nome="email" [tamanho]="13" /> {{ p.email }}</small>
+        <p class="secao__texto">
+          As preferências moldam a redação; o conteúdo continua vindo só do que foi dito na consulta.
+        </p>
+      </aside>
+    }
   </div>
 </div>

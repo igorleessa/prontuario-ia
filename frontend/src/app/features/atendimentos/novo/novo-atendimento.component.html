@@ -1,137 +1,149 @@
 <div class="pagina">
-  <a class="voltar" routerLink="/atendimentos">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-         stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
-      <path d="m15 18-6-6 6-6" />
-    </svg>
-    Atendimentos
-  </a>
+  <a class="voltar" routerLink="/atendimentos"><app-icone nome="voltar" [tamanho]="16" /> Painel de atendimentos</a>
 
-  <div>
-    <h1>Novo atendimento</h1>
-    <p class="pagina__subtitulo">Escolha o paciente da consulta para abrir o atendimento.</p>
+  <div class="pagina-topo">
+    <div class="pagina-topo__titulo">
+      <span class="pagina-topo__sobretitulo"><app-icone nome="nova-consulta" [tamanho]="14" /> Nova consulta</span>
+      <h1>Quem você vai atender?</h1>
+      <p class="pagina-topo__subtitulo">
+        Escolha o paciente e o modelo da especialidade. A transcrição só começa depois do consentimento,
+        na tela da consulta.
+      </p>
+    </div>
   </div>
 
   @if (erro()) {
-    <p class="aviso aviso--erro" role="alert">{{ erro() }}</p>
+    <p class="aviso aviso--erro" role="alert"><app-icone nome="alerta" [tamanho]="16" /> {{ erro() }}</p>
   }
 
-  <div class="cartao">
-    <div class="cartao__corpo">
-      <div class="barra">
+  <div class="grade">
+    <section class="cartao">
+      <div class="cartao__topo">
+        <div class="cartao__titulo">
+          <span class="cartao__titulo-icone"><app-icone nome="pacientes" [tamanho]="16" /></span>
+          <h2>Paciente</h2>
+        </div>
+        <button type="button" class="botao botao--secundario botao--pequeno" (click)="alternarCadastro()">
+          <app-icone [nome]="cadastrando() ? 'fechar' : 'novo-paciente'" [tamanho]="15" />
+          {{ cadastrando() ? 'Cancelar' : 'Cadastrar paciente' }}
+        </button>
+      </div>
+
+      <div class="cartao__corpo selecao">
+        @if (cadastrando()) {
+          <form class="cadastro" [formGroup]="formPaciente" (ngSubmit)="cadastrarPaciente()" novalidate>
+            <div class="campo cadastro__nome">
+              <label class="campo__rotulo" for="nome">Nome completo</label>
+              <input id="nome" type="text" formControlName="nome" autocomplete="off" />
+            </div>
+            <div class="campo">
+              <label class="campo__rotulo" for="cpf">CPF <span class="opcional">opcional</span></label>
+              <input id="cpf" type="text" formControlName="cpf" inputmode="numeric" autocomplete="off" />
+            </div>
+            <div class="campo">
+              <label class="campo__rotulo" for="nascimento">Nascimento <span class="opcional">opcional</span></label>
+              <input id="nascimento" type="date" formControlName="dataNascimento" />
+            </div>
+            <div class="campo">
+              <label class="campo__rotulo" for="contato">Contato <span class="opcional">opcional</span></label>
+              <input id="contato" type="text" formControlName="contato" autocomplete="off" />
+            </div>
+            <div class="cadastro__acoes">
+              <button type="submit" class="botao" [disabled]="formPaciente.invalid">
+                <app-icone nome="check" [tamanho]="16" /> Salvar e selecionar
+              </button>
+              <span class="acoes__nota">
+                <app-icone nome="privacidade" [tamanho]="13" />
+                Os dados do cadastro ajudam a retirar nome e CPF da transcrição antes da IA.
+              </span>
+            </div>
+          </form>
+        }
+
         <div class="campo busca">
           <label class="visualmente-oculto" for="busca">Buscar paciente</label>
+          <app-icone nome="buscar" [tamanho]="16" />
           <input id="busca" type="search" placeholder="Buscar por nome ou CPF…"
                  [ngModel]="busca()" (ngModelChange)="busca.set($event)" />
         </div>
 
-        <button type="button" class="botao botao--secundario" (click)="alternarCadastro()">
-          {{ cadastrando() ? 'Cancelar cadastro' : 'Cadastrar paciente' }}
-        </button>
+        @if (carregando()) {
+          <div class="vazio"><span class="giro"></span> Carregando pacientes…</div>
+        } @else if (filtrados().length === 0) {
+          <div class="vazio">
+            <span class="vazio__icone"><app-icone nome="paciente" /></span>
+            <span class="vazio__titulo">Nenhum paciente encontrado</span>
+            <p>Cadastre o paciente para abrir a consulta.</p>
+          </div>
+        } @else {
+          <ul class="pacientes">
+            @for (p of filtrados(); track p.id) {
+              <li>
+                <button type="button" class="paciente" [class.paciente--selecionado]="selecionado()?.id === p.id"
+                        [attr.aria-pressed]="selecionado()?.id === p.id" (click)="selecionar(p)">
+                  <app-avatar [nome]="p.nome" />
+                  <span class="paciente__info">
+                    <strong>{{ p.nome }}</strong>
+                    <small>
+                      @if (idade(p.dataNascimento); as anos) { <span>{{ anos }}</span> }
+                      @if (p.cpf) { <span>CPF {{ cpfMascarado(p.cpf) }}</span> }
+                      @if (p.idExternoEmr) { <span>EMR {{ p.idExternoEmr }}</span> }
+                      @if (!p.cpf && !p.dataNascimento && !p.idExternoEmr) { <span>Sem dados adicionais</span> }
+                    </small>
+                  </span>
+                  <span class="paciente__marca" aria-hidden="true"><app-icone nome="check" [tamanho]="14" [traco]="3" /></span>
+                </button>
+              </li>
+            }
+          </ul>
+        }
       </div>
+    </section>
 
-      @if (cadastrando()) {
-        <form class="cadastro" [formGroup]="formPaciente" (ngSubmit)="cadastrarPaciente()" novalidate>
-          <div class="campo">
-            <label class="campo__rotulo" for="nome">Nome completo</label>
-            <input id="nome" type="text" formControlName="nome" autocomplete="off" />
+    <aside class="resumo cartao">
+      <div class="cartao__corpo resumo__corpo">
+        <h2>Resumo</h2>
+
+        @if (selecionado(); as p) {
+          <div class="resumo__paciente">
+            <app-avatar [nome]="p.nome" [tamanho]="3" />
+            <div>
+              <strong>{{ p.nome }}</strong>
+              <small>{{ idade(p.dataNascimento) ?? 'Idade não informada' }}</small>
+            </div>
           </div>
-
-          <div class="campo">
-            <label class="campo__rotulo" for="cpf">CPF <span class="opcional">opcional</span></label>
-            <input id="cpf" type="text" formControlName="cpf" inputmode="numeric" autocomplete="off" />
+        } @else {
+          <div class="resumo__vazio">
+            <app-icone nome="paciente" [tamanho]="20" />
+            Selecione um paciente na lista.
           </div>
+        }
 
-          <div class="campo">
-            <label class="campo__rotulo" for="nascimento">
-              Data de nascimento <span class="opcional">opcional</span>
-            </label>
-            <input id="nascimento" type="date" formControlName="dataNascimento" />
-          </div>
-
-          <div class="campo">
-            <label class="campo__rotulo" for="contato">Contato <span class="opcional">opcional</span></label>
-            <input id="contato" type="text" formControlName="contato" autocomplete="off" />
-          </div>
-
-          <button type="submit" class="botao cadastro__enviar" [disabled]="formPaciente.invalid">
-            Salvar paciente
-          </button>
-        </form>
-      }
-
-      @if (carregando()) {
-        <div class="vazio">Carregando pacientes…</div>
-      } @else if (filtrados().length === 0) {
-        <div class="vazio">
-          <span class="vazio__titulo">Nenhum paciente encontrado</span>
-          <p>Cadastre o paciente para abrir o atendimento.</p>
-        </div>
-      } @else {
-        <ul class="pacientes">
-          @for (paciente of filtrados(); track paciente.id) {
-            <li>
-              <button type="button" class="paciente"
-                      [class.paciente--selecionado]="selecionado()?.id === paciente.id"
-                      [attr.aria-pressed]="selecionado()?.id === paciente.id"
-                      (click)="selecionar(paciente)">
-                <span class="paciente__info">
-                  <strong>{{ paciente.nome }}</strong>
-                  <small>
-                    @if (paciente.cpf) { CPF {{ paciente.cpf }} }
-                    @if (paciente.cpf && idade(paciente.dataNascimento)) { · }
-                    @if (idade(paciente.dataNascimento)) { {{ idade(paciente.dataNascimento) }} }
-                    @if (!paciente.cpf && !idade(paciente.dataNascimento)) { Sem dados adicionais }
-                  </small>
-                </span>
-
-                <span class="paciente__marca" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                       stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M20 6 9 17l-5-5" />
-                  </svg>
-                </span>
-              </button>
-            </li>
-          }
-        </ul>
-      }
-    </div>
-  </div>
-
-  @if (modelos().length > 0) {
-    <div class="cartao">
-      <div class="cartao__corpo">
         <div class="campo">
-          <label class="campo__rotulo" for="modelo">Modelo da nota</label>
-          <select id="modelo" [ngModel]="modeloEscolhido()"
-                  (ngModelChange)="modeloEscolhido.set($event)">
-            <option value="">Consulta geral (modelo padrão)</option>
+          <label class="campo__rotulo" for="modelo"><app-icone nome="estetoscopio" [tamanho]="15" /> Modelo da nota</label>
+          <select id="modelo" [ngModel]="modeloEscolhido()" (ngModelChange)="modeloEscolhido.set($event)">
+            <option value="">Consulta geral (padrão)</option>
             @for (modelo of modelos(); track modelo.id) {
               <option [value]="modelo.id">{{ modelo.nome }}</option>
             }
           </select>
           <span class="campo__dica">
-            Orienta a IA sobre o que destacar em cada campo — o que se espera numa nota de
-            cardiologia é diferente do que se espera numa de pediatria.
+            Orienta a IA sobre o que destacar — uma nota de cardiologia não é igual a uma de pediatria.
           </span>
         </div>
+
+        <ul class="resumo__garantias">
+          <li><app-icone nome="microfone-desligado" [tamanho]="15" /> Sem gravação de áudio</li>
+          <li><app-icone nome="privacidade" [tamanho]="15" /> Dados pessoais protegidos antes da IA</li>
+          <li><app-icone nome="caneta" [tamanho]="15" /> Você revisa antes de assinar</li>
+        </ul>
+
+        <button type="button" class="botao botao--grande botao--bloco" [disabled]="!selecionado() || abrindo()"
+                (click)="abrirAtendimento()">
+          @if (abrindo()) { <span class="giro"></span> Abrindo… }
+          @else { Abrir consulta <app-icone nome="avancar" /> }
+        </button>
       </div>
-    </div>
-  }
-
-  <div class="rodape">
-    <span class="rodape__resumo">
-      @if (selecionado(); as p) {
-        Paciente selecionado: <strong>{{ p.nome }}</strong>
-      } @else {
-        Selecione um paciente para continuar.
-      }
-    </span>
-
-    <button type="button" class="botao" [disabled]="!selecionado() || abrindo()"
-            (click)="abrirAtendimento()">
-      {{ abrindo() ? 'Abrindo…' : 'Abrir atendimento' }}
-    </button>
+    </aside>
   </div>
 </div>

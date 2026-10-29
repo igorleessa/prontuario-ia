@@ -35,6 +35,7 @@
               }
             ],
             "styles": [
+              "node_modules/@fontsource-variable/inter/index.css",
               "src/styles.scss"
             ],
             "scripts": []
@@ -49,8 +50,8 @@
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "6kB",
-                  "maximumError": "10kB"
+                  "maximumWarning": "16kB",
+                  "maximumError": "20kB"
                 }
               ],
               "outputHashing": "all"
@@ -97,6 +98,7 @@
               }
             ],
             "styles": [
+              "node_modules/@fontsource-variable/inter/index.css",
               "src/styles.scss"
             ],
             "scripts": []

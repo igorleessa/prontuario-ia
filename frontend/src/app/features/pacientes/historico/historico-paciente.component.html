@@ -1,74 +1,77 @@
 <div class="pagina">
-  <a class="voltar" routerLink="/atendimentos">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-         stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
-      <path d="m15 18-6-6 6-6" />
-    </svg>
-    Atendimentos
-  </a>
+  <a class="voltar" routerLink="/pacientes"><app-icone nome="voltar" [tamanho]="16" /> Pacientes</a>
 
   @if (erro()) {
-    <p class="aviso aviso--erro" role="alert">{{ erro() }}</p>
+    <p class="aviso aviso--erro" role="alert"><app-icone nome="alerta" [tamanho]="16" /> {{ erro() }}</p>
   }
 
   @if (carregando()) {
-    <div class="cartao"><div class="vazio">Carregando histórico…</div></div>
+    <div class="cartao"><div class="vazio"><span class="giro"></span> Carregando histórico…</div></div>
   } @else {
     @if (historico(); as h) {
     <header class="ficha cartao">
-      <div class="cartao__corpo">
+      <app-avatar [nome]="h.pacienteNome" [tamanho]="3.5" />
+      <div class="ficha__info">
         <h1>{{ h.pacienteNome }}</h1>
-        <p class="ficha__meta">
-          @if (h.cpf) { CPF {{ h.cpf }} }
-          @if (h.cpf && idade()) { · }
-          @if (idade()) { {{ idade() }} }
-          @if (h.idExternoEmr) { · ID no EMR {{ h.idExternoEmr }} }
-          @if (!h.cpf && !idade() && !h.idExternoEmr) { Sem dados adicionais }
-        </p>
+        <ul class="ficha__dados">
+          @if (idade() !== null) { <li><app-icone nome="agenda" [tamanho]="14" /> {{ idade() }} anos</li> }
+          @if (cpf(); as documento) { <li><app-icone nome="identificacao" [tamanho]="14" /> {{ documento }}</li> }
+          @if (h.idExternoEmr) { <li><app-icone nome="webhook" [tamanho]="14" /> EMR {{ h.idExternoEmr }}</li> }
+        </ul>
       </div>
+      <div class="ficha__numeros">
+        <div><strong class="numero">{{ h.atendimentos.length }}</strong><small>atendimentos</small></div>
+        <div><strong class="numero">{{ finalizados() }}</strong><small>registros assinados</small></div>
+      </div>
+      <a class="botao" routerLink="/atendimentos/novo" [queryParams]="{ paciente: h.pacienteId }">
+        <app-icone nome="nova-consulta" [tamanho]="16" /> Nova consulta
+      </a>
     </header>
 
-    <div class="cartao">
-      <div class="cartao__corpo">
-        <h2>Atendimentos</h2>
-
-        @if (h.atendimentos.length === 0) {
-          <div class="vazio">
-            <span class="vazio__titulo">Nenhum atendimento</span>
-            <p>Este paciente ainda não passou por uma consulta neste sistema.</p>
-          </div>
-        } @else {
-          <ol class="linha-do-tempo">
-            @for (atendimento of h.atendimentos; track atendimento.id) {
-              <li class="evento">
-                <span class="evento__marca" aria-hidden="true"></span>
-                <a class="evento__corpo" [routerLink]="['/atendimentos', atendimento.id]">
-                  <div class="evento__topo">
-                    <strong>{{ atendimento.dataHora | date: "dd 'de' MMMM 'de' y, HH:mm" }}</strong>
-                    <span class="selo selo--{{ classeStatus[atendimento.status] }}">
-                      {{ rotuloStatus[atendimento.status] }}
-                    </span>
-                  </div>
-
-                  <p class="evento__medico">{{ atendimento.medicoNome }}</p>
-
-                  @if (atendimento.queixaPrincipal) {
-                    <p class="evento__campo">
-                      <span>Queixa</span> {{ atendimento.queixaPrincipal }}
-                    </p>
-                  }
-                  @if (atendimento.hipoteseDiagnostica) {
-                    <p class="evento__campo">
-                      <span>Hipótese</span> {{ atendimento.hipoteseDiagnostica }}
-                    </p>
-                  }
-                </a>
-              </li>
-            }
-          </ol>
-        }
+    <section class="cartao">
+      <div class="cartao__topo">
+        <div class="cartao__titulo">
+          <span class="cartao__titulo-icone"><app-icone nome="historico" [tamanho]="16" /></span>
+          <h2>Linha do tempo</h2>
+        </div>
       </div>
-    </div>
+
+      @if (h.atendimentos.length === 0) {
+        <div class="vazio">
+          <span class="vazio__icone"><app-icone nome="prontuario" /></span>
+          <span class="vazio__titulo">Nenhum atendimento</span>
+          <p>Este paciente ainda não passou por uma consulta neste sistema.</p>
+        </div>
+      } @else {
+        <ol class="linha-do-tempo">
+          @for (atendimento of h.atendimentos; track atendimento.id) {
+            <li class="evento" [class.evento--assinado]="atendimento.finalizado">
+              <span class="evento__marca" aria-hidden="true">
+                <app-icone [nome]="atendimento.finalizado ? 'verificado' : 'prontuario'" [tamanho]="14" />
+              </span>
+              <a class="evento__corpo" [routerLink]="['/atendimentos', atendimento.id]">
+                <div class="evento__topo">
+                  <strong>{{ atendimento.dataHora | date: "dd 'de' MMMM 'de' y" }}</strong>
+                  <small>{{ atendimento.dataHora | date: 'HH:mm' }} · {{ atendimento.medicoNome }}</small>
+                  <span class="selo selo--{{ classeStatus[atendimento.status] }}">{{ rotuloStatus[atendimento.status] }}</span>
+                </div>
+
+                @if (atendimento.queixaPrincipal || atendimento.hipoteseDiagnostica) {
+                  <dl class="evento__campos">
+                    @if (atendimento.queixaPrincipal) {
+                      <div><dt>Queixa</dt><dd>{{ atendimento.queixaPrincipal }}</dd></div>
+                    }
+                    @if (atendimento.hipoteseDiagnostica) {
+                      <div><dt>Hipótese</dt><dd>{{ atendimento.hipoteseDiagnostica }}</dd></div>
+                    }
+                  </dl>
+                }
+              </a>
+            </li>
+          }
+        </ol>
+      }
+    </section>
     }
   }
 </div>

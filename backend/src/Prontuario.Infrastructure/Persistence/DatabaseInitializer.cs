@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Prontuario.Application.Common.Interfaces;
 using Prontuario.Domain.Entities;
 using Prontuario.Domain.Enums;
 
@@ -80,21 +81,55 @@ public class DatabaseInitializer
         _logger.LogInformation("Catalogo de templates: {Total} modelos adicionados.", novos.Count);
     }
 
+    /// <summary>
+    /// Transcricoes gravadas antes da camada de sanitizacao guardam o texto
+    /// bruto da consulta. Sao sanitizadas uma vez, na primeira inicializacao
+    /// depois da atualizacao, para que nenhum texto bruto fique no banco.
+    /// </summary>
+    private async Task SanitizarTranscricoesAntigasAsync(CancellationToken cancellationToken)
+    {
+        var pendentes = await _db.Transcricoes
+            .Where(t => !t.Sanitizada)
+            .Include(t => t.SessaoTranscricao!.Atendimento!.PacienteRef)
+            .Include(t => t.SessaoTranscricao!.Atendimento!.Medico)
+            .ToListAsync(cancellationToken);
+
+        if (pendentes.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var transcricao in pendentes)
+        {
+            var atendimento = transcricao.SessaoTranscricao!.Atendimento!;
+            var identidade = Services.IdentidadeDoAtendimento.De(atendimento.PacienteRef!, atendimento.Medico!);
+
+            transcricao.Texto = _sanitizador.Sanitizar(transcricao.Texto, identidade).Valor;
+            transcricao.Sanitizada = true;
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("{Total} transcricoes anteriores a sanitizacao foram sanitizadas.", pendentes.Count);
+    }
+
     private readonly ApplicationDbContext _db;
     private readonly IPasswordHasher<Usuario> _passwordHasher;
     private readonly SeedOptions _seed;
     private readonly ILogger<DatabaseInitializer> _logger;
+    private readonly ISanitizadorDados _sanitizador;
 
     public DatabaseInitializer(
         ApplicationDbContext db,
         IPasswordHasher<Usuario> passwordHasher,
         IOptions<SeedOptions> seed,
-        ILogger<DatabaseInitializer> logger)
+        ILogger<DatabaseInitializer> logger,
+        ISanitizadorDados sanitizador)
     {
         _db = db;
         _passwordHasher = passwordHasher;
         _seed = seed.Value;
         _logger = logger;
+        _sanitizador = sanitizador;
     }
 
     public async Task InicializarAsync(CancellationToken cancellationToken = default)
@@ -103,6 +138,7 @@ public class DatabaseInitializer
         _logger.LogInformation("Migrations aplicadas.");
 
         await SemearCatalogoTemplatesAsync(cancellationToken);
+        await SanitizarTranscricoesAntigasAsync(cancellationToken);
 
         if (!_seed.Habilitado)
         {

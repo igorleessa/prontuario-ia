@@ -31,7 +31,7 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("ConsentimentoEm")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<bool>("ConsentimentoGravacao")
+                    b.Property<bool>("ConsentimentoTranscricao")
                         .HasColumnType("boolean");
 
                     b.Property<DateTime>("CriadoEm")
@@ -56,6 +56,9 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("TemplateNotaId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("TermosProtegidosCifrados")
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -144,6 +147,11 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("ModeloTextoAoVivo")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("ModeloTranscricao")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -187,34 +195,6 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Documentos");
-                });
-
-            modelBuilder.Entity("Prontuario.Domain.Entities.GravacaoAudio", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("AtendimentoId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CriadoEm")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("DuracaoSegundos")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("StoragePath")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AtendimentoId")
-                        .IsUnique();
-
-                    b.ToTable("GravacoesAudio");
                 });
 
             modelBuilder.Entity("Prontuario.Domain.Entities.LogAuditoria", b =>
@@ -416,6 +396,9 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                     b.Property<string>("HipoteseDiagnostica")
                         .HasColumnType("text");
 
+                    b.Property<string>("OrigensJson")
+                        .HasColumnType("text");
+
                     b.Property<string>("QueixaPrincipal")
                         .HasColumnType("text");
 
@@ -428,6 +411,35 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("RascunhosIA");
+                });
+
+            modelBuilder.Entity("Prontuario.Domain.Entities.SessaoTranscricao", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AtendimentoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DuracaoSegundos")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("EncerradaEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("IniciadaEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AtendimentoId")
+                        .IsUnique();
+
+                    b.ToTable("SessoesTranscricao");
                 });
 
             modelBuilder.Entity("Prontuario.Domain.Entities.TemplateNota", b =>
@@ -479,7 +491,10 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CriadoEm")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("GravacaoAudioId")
+                    b.Property<bool>("Sanitizada")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("SessaoTranscricaoId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("Status")
@@ -493,10 +508,48 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("GravacaoAudioId")
+                    b.HasIndex("SessaoTranscricaoId")
                         .IsUnique();
 
                     b.ToTable("Transcricoes");
+                });
+
+            modelBuilder.Entity("Prontuario.Domain.Entities.TrechoTranscricao", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Falante")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<bool>("FalanteConfirmado")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("ReconhecimentoAplicado")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Sequencia")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Texto")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TranscricaoId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TranscricaoId", "Sequencia")
+                        .IsUnique();
+
+                    b.ToTable("TrechosTranscricao");
                 });
 
             modelBuilder.Entity("Prontuario.Domain.Entities.Usuario", b =>
@@ -590,17 +643,6 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                     b.Navigation("Atendimento");
                 });
 
-            modelBuilder.Entity("Prontuario.Domain.Entities.GravacaoAudio", b =>
-                {
-                    b.HasOne("Prontuario.Domain.Entities.Atendimento", "Atendimento")
-                        .WithOne("GravacaoAudio")
-                        .HasForeignKey("Prontuario.Domain.Entities.GravacaoAudio", "AtendimentoId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Atendimento");
-                });
-
             modelBuilder.Entity("Prontuario.Domain.Entities.LogAuditoria", b =>
                 {
                     b.HasOne("Prontuario.Domain.Entities.Atendimento", "Atendimento")
@@ -663,6 +705,17 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                     b.Navigation("Transcricao");
                 });
 
+            modelBuilder.Entity("Prontuario.Domain.Entities.SessaoTranscricao", b =>
+                {
+                    b.HasOne("Prontuario.Domain.Entities.Atendimento", "Atendimento")
+                        .WithOne("SessaoTranscricao")
+                        .HasForeignKey("Prontuario.Domain.Entities.SessaoTranscricao", "AtendimentoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Atendimento");
+                });
+
             modelBuilder.Entity("Prontuario.Domain.Entities.TemplateNota", b =>
                 {
                     b.HasOne("Prontuario.Domain.Entities.Clinica", "Clinica")
@@ -675,13 +728,24 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("Prontuario.Domain.Entities.Transcricao", b =>
                 {
-                    b.HasOne("Prontuario.Domain.Entities.GravacaoAudio", "GravacaoAudio")
+                    b.HasOne("Prontuario.Domain.Entities.SessaoTranscricao", "SessaoTranscricao")
                         .WithOne("Transcricao")
-                        .HasForeignKey("Prontuario.Domain.Entities.Transcricao", "GravacaoAudioId")
+                        .HasForeignKey("Prontuario.Domain.Entities.Transcricao", "SessaoTranscricaoId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("GravacaoAudio");
+                    b.Navigation("SessaoTranscricao");
+                });
+
+            modelBuilder.Entity("Prontuario.Domain.Entities.TrechoTranscricao", b =>
+                {
+                    b.HasOne("Prontuario.Domain.Entities.Transcricao", "Transcricao")
+                        .WithMany("Trechos")
+                        .HasForeignKey("TranscricaoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Transcricao");
                 });
 
             modelBuilder.Entity("Prontuario.Domain.Entities.Usuario", b =>
@@ -699,13 +763,13 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                 {
                     b.Navigation("Documentos");
 
-                    b.Navigation("GravacaoAudio");
-
                     b.Navigation("LogsAuditoria");
 
                     b.Navigation("NotaExportavel");
 
                     b.Navigation("Prontuario");
+
+                    b.Navigation("SessaoTranscricao");
                 });
 
             modelBuilder.Entity("Prontuario.Domain.Entities.Clinica", b =>
@@ -715,19 +779,21 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                     b.Navigation("Usuarios");
                 });
 
-            modelBuilder.Entity("Prontuario.Domain.Entities.GravacaoAudio", b =>
-                {
-                    b.Navigation("Transcricao");
-                });
-
             modelBuilder.Entity("Prontuario.Domain.Entities.PacienteRef", b =>
                 {
                     b.Navigation("Atendimentos");
                 });
 
+            modelBuilder.Entity("Prontuario.Domain.Entities.SessaoTranscricao", b =>
+                {
+                    b.Navigation("Transcricao");
+                });
+
             modelBuilder.Entity("Prontuario.Domain.Entities.Transcricao", b =>
                 {
                     b.Navigation("RascunhoIA");
+
+                    b.Navigation("Trechos");
                 });
 #pragma warning restore 612, 618
         }

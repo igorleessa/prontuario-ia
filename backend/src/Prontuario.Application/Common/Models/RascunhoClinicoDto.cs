@@ -13,3 +13,21 @@ public sealed record RascunhoClinicoDto(
     string? HipoteseDiagnostica,
     string? Cid10Sugerido,
     string? Conduta);
+
+/// <summary>
+/// Rascunho com a origem de cada campo: as sequencias dos trechos da
+/// transcricao que sustentam o que a IA escreveu. Deixa o medico conferir a
+/// sugestao na propria fala, em vez de confiar nela.
+/// </summary>
+public sealed record RascunhoComOrigensDto(
+    RascunhoClinicoDto Rascunho,
+    IReadOnlyDictionary<string, IReadOnlyList<int>> Origens,
+    /// <summary>
+    /// Quem disse cada trecho, pela sequencia: "Medico", "Paciente" ou
+    /// "Acompanhante". Atribuido pelo conteudo da fala.
+    /// </summary>
+    IReadOnlyDictionary<int, string>? Falantes = null)
+{
+    public static readonly IReadOnlyDictionary<string, IReadOnlyList<int>> SemOrigens =
+        new Dictionary<string, IReadOnlyList<int>>();
+}

@@ -20,34 +20,34 @@ describe('AppComponent', () => {
     expect(fixture.componentInstance).toBeTruthy();
   });
 
-  it('esconde o cabecalho enquanto ninguem esta autenticado', () => {
+  it('esconde a navegacao enquanto ninguem esta autenticado', () => {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
 
     const elemento = fixture.nativeElement as HTMLElement;
-    expect(elemento.querySelector('.cabecalho')).toBeNull();
+    expect(elemento.querySelector('.lateral')).toBeNull();
   });
 
-  it('mostra o cabecalho com as iniciais do medico apos o login', () => {
+  it('mostra a navegacao com as iniciais do medico apos o login', () => {
     autenticar('Medico');
 
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
 
     const elemento = fixture.nativeElement as HTMLElement;
-    expect(elemento.querySelector('.cabecalho')).not.toBeNull();
-    expect(elemento.querySelector('.avatar')?.textContent?.trim()).toBe('AS');
+    expect(elemento.querySelector('.lateral')).not.toBeNull();
+    expect(elemento.querySelector('.usuario .avatar')?.textContent?.trim()).toBe('AS');
   });
 
   // Quem atende nao configura a clinica nem le a trilha de auditoria. O backend
-  // recusa de qualquer forma; o cabecalho nao deve oferecer o caminho.
+  // recusa de qualquer forma; o menu nao deve oferecer o caminho.
   it('nao oferece configuracoes nem auditoria ao medico', () => {
     autenticar('Medico');
 
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
 
-    expect(rotulosDoCabecalho(fixture.nativeElement)).toEqual(['Meu perfil', 'Sair']);
+    expect(rotulosDoMenu(fixture.nativeElement)).toEqual(['Painel', 'Nova consulta', 'Pacientes']);
   });
 
   it('oferece configuracoes e auditoria ao administrador', () => {
@@ -56,7 +56,7 @@ describe('AppComponent', () => {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
 
-    const rotulos = rotulosDoCabecalho(fixture.nativeElement);
+    const rotulos = rotulosDoMenu(fixture.nativeElement);
     expect(rotulos).toContain('Configurações');
     expect(rotulos).toContain('Auditoria');
   });
@@ -74,8 +74,6 @@ function autenticar(papel: string): void {
   });
 }
 
-function rotulosDoCabecalho(elemento: HTMLElement): string[] {
-  return Array.from(elemento.querySelectorAll('.cabecalho__usuario a, .cabecalho__usuario button')).map(
-    (item) => item.textContent?.trim() ?? '',
-  );
+function rotulosDoMenu(elemento: HTMLElement): string[] {
+  return Array.from(elemento.querySelectorAll('.menu__item')).map((item) => item.textContent?.trim() ?? '');
 }

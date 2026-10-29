@@ -50,13 +50,47 @@ jobs:
         working-directory: frontend
         run: npx ng test --watch=false --browsers=ChromeHeadless
 
+  privacidade-ner:
+    name: Reconhecimento de nomes (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: servicos/privacidade-ner/requirements*.txt
+
+      - name: Instalar dependências e o modelo de português
+        working-directory: servicos/privacidade-ner
+        run: |
+          pip install -r requirements-dev.txt
+          pip install https://github.com/explosion/spacy-models/releases/download/pt_core_news_md-3.8.0/pt_core_news_md-3.8.0-py3-none-any.whl
+
+      - name: Testes
+        working-directory: servicos/privacidade-ner
+        run: python -m pytest -q
+
+      # O corpus de privacidade do backend passando pelo modelo de verdade:
+      # pega o caso em que o reconhecedor apaga conteudo clinico.
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Corpus de privacidade com o reconhecedor real
+        run: |
+          (cd servicos/privacidade-ner && uvicorn app:app --port 8000 --no-access-log &)
+          for _ in $(seq 1 30); do curl -fsS http://localhost:8000/saude && break; sleep 2; done
+          NER_URL=http://localhost:8000 dotnet test backend/Prontuario.sln --filter "FullyQualifiedName~CorpusComReconhecedorReal"
+
   compose:
     name: Imagens Docker
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # Garante que os quatro Dockerfiles continuam construindo; o ambiente de
+      # Garante que os Dockerfiles continuam construindo; o ambiente de
       # demonstração do cliente sobe por aqui.
       - name: Construir as imagens
         run: docker compose build
@@ -65,8 +99,6 @@ jobs:
           POSTGRES_PASSWORD: ci
           POSTGRES_DB: prontuario
           JWT_KEY: chave-de-integracao-continua-com-mais-de-32-bytes
-          MINIO_USER: ci
-          MINIO_PASSWORD: ci-senha-minio
           SEED_EMAIL: medico@ci.test
           SEED_SENHA: ci
           SEED_EMAIL_ADMIN: admin@ci.test

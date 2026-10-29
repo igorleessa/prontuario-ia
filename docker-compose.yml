@@ -15,17 +15,16 @@ services:
       timeout: 5s
       retries: 20
 
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD}
-    ports:
-      - "${MINIO_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
-    volumes:
-      - minio-data:/data
+  # Reconhecimento de nomes da sanitizacao. Sem porta publicada: so o backend
+  # o alcanca, pela rede interna do compose, e o texto nao sai da maquina.
+  privacidade-ner:
+    build:
+      context: ./servicos/privacidade-ner
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/saude')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   backend:
     build:
@@ -55,15 +54,17 @@ services:
       Seed__EmailAdministrador: ${SEED_EMAIL_ADMIN}
       Seed__NomeAdministrador: ${SEED_NOME_ADMIN:-Administrador da Clinica}
       Cors__OrigensPermitidas__0: "http://localhost:${FRONTEND_PORT:-4200}"
-      ArmazenamentoAudio__Endpoint: http://minio:9000
-      ArmazenamentoAudio__AccessKey: ${MINIO_USER}
-      ArmazenamentoAudio__SecretKey: ${MINIO_PASSWORD}
-      ArmazenamentoAudio__Bucket: consultas
-      # Dias que o audio bruto fica guardado depois de transcrito (LGPD).
-      # Zero mantem as gravacoes ate expurgo manual.
-      ArmazenamentoAudio__RetencaoDias: ${AUDIO_RETENCAO_DIAS:-30}
-      # Libera o botao "Simular consulta", que roda o pipeline sobre uma consulta
-      # ficticia - a demonstracao deixa de depender de microfone e de rede.
+      # Nenhum audio e gravado: a consulta e transcrita ao vivo. Com o tempo
+      # real desligado (rede que bloqueia WebRTC com a OpenAI), o navegador
+      # envia trechos de segundos, transcritos em memoria e descartados.
+      Transcricao__TempoRealHabilitado: ${TRANSCRICAO_TEMPO_REAL:-true}
+      # Reconhecedor de nomes local. Fora do ar, a fala e guardada com as outras
+      # camadas da sanitizacao, mas nada vai para a IA ate ele voltar.
+      Privacidade__Ner__Url: http://privacidade-ner:8000
+      # PER (pessoas) por padrao; acrescente LOC e ORG para retirar lugares e organizacoes.
+      Privacidade__Ner__Categorias: ${NER_CATEGORIAS:-PER}
+      # Libera o botao "Simular consulta", que envia as falas de uma consulta
+      # ficticia como se viessem da transcricao - a demonstracao nao depende de microfone.
       Demonstracao__Habilitado: ${DEMONSTRACAO_HABILITADA:-true}
       # Linha de base de documentacao manual usada no calculo de tempo economizado.
       Metricas__MinutosDocumentacaoManual: ${MINUTOS_DOCUMENTACAO_MANUAL:-7}
@@ -79,7 +80,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      minio:
+      privacidade-ner:
         condition: service_started
 
   frontend:
@@ -104,5 +105,4 @@ services:
 
 volumes:
   postgres-data:
-  minio-data:
   dataprotection-keys:

@@ -3,18 +3,22 @@ import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ConfiguracaoIA } from '../../core/models/configuracao-ia.model';
+import { AppConfigService } from '../../core/services/app-config.service';
 import { ConfiguracaoIAService } from '../../core/services/configuracao-ia.service';
 import { ConfiguracaoExportacaoComponent } from './exportacao/configuracao-exportacao.component';
+import { IconeComponent } from '../../shared/icone.component';
 
 @Component({
   selector: 'app-configuracao-ia',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, DatePipe, ConfiguracaoExportacaoComponent],
+  imports: [ReactiveFormsModule, RouterLink, DatePipe, ConfiguracaoExportacaoComponent, IconeComponent],
   templateUrl: './configuracao-ia.component.html',
   styleUrl: './configuracao-ia.component.scss',
 })
 export class ConfiguracaoIAComponent {
   private readonly configuracoes = inject(ConfiguracaoIAService);
+
+  readonly reconhecimentoNomes = inject(AppConfigService).reconhecimentoNomes;
 
   readonly carregando = signal(true);
   readonly salvando = signal(false);
@@ -24,8 +28,9 @@ export class ConfiguracaoIAComponent {
 
   readonly form = inject(FormBuilder).nonNullable.group({
     chaveApi: [''],
-    modeloTranscricao: ['whisper-1'],
+    modeloTranscricao: ['gpt-4o-transcribe'],
     modeloTexto: ['gpt-4o'],
+    modeloTextoAoVivo: ['gpt-4o-mini'],
   });
 
   constructor() {
@@ -41,6 +46,7 @@ export class ConfiguracaoIAComponent {
         this.form.patchValue({
           modeloTranscricao: configuracao.modeloTranscricao,
           modeloTexto: configuracao.modeloTexto,
+          modeloTextoAoVivo: configuracao.modeloTextoAoVivo,
         });
         this.carregando.set(false);
       },
@@ -72,6 +78,7 @@ export class ConfiguracaoIAComponent {
         chaveApi: valores.chaveApi.trim() || null,
         modeloTranscricao: valores.modeloTranscricao,
         modeloTexto: valores.modeloTexto,
+        modeloTextoAoVivo: valores.modeloTextoAoVivo,
       })
       .subscribe({
         next: (configuracao) => {
@@ -100,11 +107,17 @@ export class ConfiguracaoIAComponent {
         this.configuracao.set({
           chaveConfigurada: false,
           chaveApiSufixo: null,
-          modeloTranscricao: 'whisper-1',
+          modeloTranscricao: 'gpt-4o-transcribe',
           modeloTexto: 'gpt-4o',
           atualizadoEm: null,
+          modeloTextoAoVivo: 'gpt-4o-mini',
         });
-        this.form.reset({ chaveApi: '', modeloTranscricao: 'whisper-1', modeloTexto: 'gpt-4o' });
+        this.form.reset({
+          chaveApi: '',
+          modeloTranscricao: 'gpt-4o-transcribe',
+          modeloTexto: 'gpt-4o',
+          modeloTextoAoVivo: 'gpt-4o-mini',
+        });
         this.sucesso.set('Chave removida.');
       },
       error: () => this.erro.set('Não foi possível remover a chave.'),

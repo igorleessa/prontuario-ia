@@ -22,3 +22,9 @@ npm-debug.log*
 
 # macOS
 .DS_Store
+
+# Python (servicos/)
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/

@@ -20,9 +20,9 @@ public class AtendimentoConfiguration : IEntityTypeConfiguration<Atendimento>
             .HasForeignKey(a => a.MedicoId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasOne(a => a.GravacaoAudio)
-            .WithOne(g => g.Atendimento)
-            .HasForeignKey<GravacaoAudio>(g => g.AtendimentoId);
+        builder.HasOne(a => a.SessaoTranscricao)
+            .WithOne(s => s.Atendimento)
+            .HasForeignKey<SessaoTranscricao>(s => s.AtendimentoId);
 
         builder.HasOne(a => a.Prontuario)
             .WithOne(p => p.Atendimento)

@@ -1,11 +1,13 @@
-import { Component, computed, inject } from '@angular/core';
-import { Router, RouterLink, RouterOutlet } from '@angular/router';
+import { Component, inject, signal } from '@angular/core';
+import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from './core/services/auth.service';
+import { AvatarComponent } from './shared/avatar.component';
+import { IconeComponent } from './shared/icone.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, RouterLink],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, IconeComponent, AvatarComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss',
 })
@@ -17,18 +19,16 @@ export class AppComponent {
   readonly usuario = this.auth.usuario;
   readonly administrador = this.auth.administrador;
 
-  /** Iniciais do medico para o avatar do cabecalho. */
-  readonly iniciais = computed(() => {
-    const nome = this.usuario()?.nome?.trim();
-    if (!nome) {
-      return '–';
-    }
+  /** Menu lateral em telas estreitas (tablet na mão do médico, celular). */
+  readonly menuAberto = signal(false);
 
-    const partes = nome.split(/\s+/);
-    const primeira = partes[0]!.charAt(0);
-    const ultima = partes.length > 1 ? partes[partes.length - 1]!.charAt(0) : '';
-    return (primeira + ultima).toUpperCase();
-  });
+  alternarMenu(): void {
+    this.menuAberto.update((aberto) => !aberto);
+  }
+
+  fecharMenu(): void {
+    this.menuAberto.set(false);
+  }
 
   sair(): void {
     this.auth.logout();

@@ -4,6 +4,7 @@ import { environment } from '../../../environments/environment';
 
 interface ConfiguracaoApp {
   demonstracao: boolean;
+  reconhecimentoNomes: boolean;
 }
 
 /**
@@ -16,9 +17,15 @@ export class AppConfigService {
 
   readonly demonstracao = signal(false);
 
+  /** Se a camada de reconhecimento de nomes (modelo local) está em uso neste ambiente. */
+  readonly reconhecimentoNomes = signal(false);
+
   constructor() {
     this.http.get<ConfiguracaoApp>(`${environment.apiUrl}/configuracao-app`).subscribe({
-      next: ({ demonstracao }) => this.demonstracao.set(demonstracao),
+      next: ({ demonstracao, reconhecimentoNomes }) => {
+        this.demonstracao.set(demonstracao);
+        this.reconhecimentoNomes.set(reconhecimentoNomes ?? false);
+      },
       // Sem resposta, a interface assume o modo normal: melhor esconder o botão
       // de demonstração do que oferecê-lo e ele falhar na frente do cliente.
       error: () => this.demonstracao.set(false),

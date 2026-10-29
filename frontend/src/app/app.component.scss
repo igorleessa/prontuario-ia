@@ -1,26 +1,32 @@
-.cabecalho {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background: var(--superficie);
-  border-bottom: 1px solid var(--borda);
+.estrutura {
+  display: grid;
+  grid-template-columns: 16.5rem minmax(0, 1fr);
+  min-height: 100vh;
+  /* A coluna do menu mantem a cor mesmo quando a pagina e mais alta que a tela. */
+  background: linear-gradient(90deg, var(--nav-2) 16.5rem, transparent 16.5rem);
 }
 
-.cabecalho__conteudo {
+/* ---------- Lateral ---------- */
+
+.lateral {
+  position: sticky;
+  top: 0;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  max-width: 72rem;
-  margin: 0 auto;
-  padding: 0.75rem 1.5rem;
+  flex-direction: column;
+  gap: 1.25rem;
+  height: 100vh;
+  padding: 1.25rem 1rem 1rem;
+  background: linear-gradient(180deg, var(--nav) 0%, var(--nav-2) 100%);
+  color: var(--nav-texto);
+  overflow-y: auto;
 }
 
 .marca {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  color: inherit;
+  padding: 0 0.375rem;
+  color: var(--nav-texto-forte);
 }
 
 .marca:hover { text-decoration: none; }
@@ -28,59 +34,188 @@
 .marca__simbolo {
   display: grid;
   place-items: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: var(--raio);
-  background: var(--primary);
-  color: var(--primary-contraste);
-
-  svg {
-    width: 1.25rem;
-    height: 1.25rem;
-  }
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, #14a59c, #0b7a75);
+  color: #ffffff;
+  box-shadow: 0 6px 16px -6px rgb(20 165 156 / 0.7);
 }
 
-.marca__texto,
-.cabecalho__nome {
+.marca__texto {
   display: flex;
   flex-direction: column;
-  line-height: 1.25;
+  line-height: 1.2;
 
-  strong { font-size: 0.9375rem; font-weight: 620; }
-  small { font-size: 0.75rem; color: var(--texto-tenue); }
+  strong { font-size: 1rem; font-weight: 680; letter-spacing: -0.01em; }
+  small { font-size: 0.6875rem; color: var(--nav-texto); }
 }
 
-.cabecalho__usuario {
+.clinica {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: var(--raio);
+  background: rgb(255 255 255 / 0.05);
+  border: 1px solid rgb(255 255 255 / 0.07);
+
+  span { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+  strong { font-size: 0.8125rem; color: var(--nav-texto-forte); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  small { font-size: 0.6875rem; }
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.menu__grupo {
+  margin: 0.75rem 0 0.375rem;
+  padding: 0 0.75rem;
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(197 211 224 / 0.6);
+}
+
+.menu__grupo:first-child { margin-top: 0; }
+
+.menu__item {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  padding: 0.5625rem 0.75rem;
+  border-radius: var(--raio);
+  color: var(--nav-texto);
+  font-size: 0.875rem;
+  font-weight: 560;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-.avatar {
+.menu__item:hover {
+  background: rgb(255 255 255 / 0.06);
+  color: var(--nav-texto-forte);
+  text-decoration: none;
+}
+
+.menu__item--ativo {
+  background: var(--nav-ativo);
+  color: var(--nav-texto-forte);
+  box-shadow: inset 3px 0 0 #2bc2b8;
+}
+
+.privacidade {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding: 0.75rem;
+  border-radius: var(--raio);
+  background: rgb(43 194 184 / 0.1);
+  color: #8fe0d9;
+  font-size: 0.75rem;
+  line-height: 1.4;
+
+  app-icone { flex-shrink: 0; margin-top: 0.0625rem; }
+}
+
+.usuario {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgb(255 255 255 / 0.08);
+}
+
+.usuario__perfil {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  flex: 1;
+  min-width: 0;
+  padding: 0.375rem;
+  border-radius: var(--raio);
+  color: inherit;
+
+  span { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+  strong { font-size: 0.8125rem; color: var(--nav-texto-forte); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  small { font-size: 0.6875rem; }
+}
+
+.usuario__perfil:hover { background: rgb(255 255 255 / 0.06); text-decoration: none; }
+
+.usuario__sair {
   display: grid;
   place-items: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 50%;
-  background: var(--primary-suave);
-  color: var(--primary);
-  font-size: 0.75rem;
-  font-weight: 650;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 0;
+  border-radius: var(--raio);
+  background: transparent;
+  color: var(--nav-texto);
+  cursor: pointer;
 }
+
+.usuario__sair:hover { background: rgb(255 255 255 / 0.08); color: var(--nav-texto-forte); }
+
+/* ---------- Area principal ---------- */
+
+.principal { min-width: 0; }
 
 .conteudo {
-  max-width: 72rem;
+  max-width: 82rem;
   margin: 0 auto;
-  padding: 2rem 1.5rem 4rem;
+  padding: 2rem 2.25rem 4rem;
 }
 
-.conteudo--limpo {
-  max-width: none;
-  padding: 0;
-}
+.barra-movel,
+.cortina { display: none; }
 
-@media (max-width: 640px) {
-  .cabecalho__conteudo { padding: 0.75rem 1rem; }
-  .cabecalho__nome { display: none; }
-  .conteudo { padding: 1.5rem 1rem 3rem; }
+@media (max-width: 960px) {
+  .estrutura { grid-template-columns: minmax(0, 1fr); background: none; }
+
+  .lateral {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 30;
+    width: 17rem;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+
+  .estrutura--menu-aberto .lateral { transform: none; box-shadow: var(--sombra-g); }
+
+  .cortina {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    border: 0;
+    background: rgb(12 34 51 / 0.45);
+  }
+
+  .estrutura--menu-aberto .cortina { display: block; }
+
+  .barra-movel {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: var(--superficie);
+    border-bottom: 1px solid var(--borda);
+  }
+
+  .barra-movel__marca {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 650;
+    color: var(--primary);
+  }
+
+  .conteudo { padding: 1.25rem 1rem 3rem; }
 }

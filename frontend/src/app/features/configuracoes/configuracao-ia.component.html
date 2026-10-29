@@ -1,104 +1,118 @@
 <div class="pagina">
-  <a class="voltar" routerLink="/atendimentos">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-         stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
-      <path d="m15 18-6-6 6-6" />
-    </svg>
-    Atendimentos
-  </a>
-
-  <div>
-    <h1>Configurações da clínica</h1>
-    <p class="pagina__subtitulo">
-      Credenciais de IA e destino da nota clínica. Ajustes de clínica, não de usuário.
-    </p>
+  <div class="pagina-topo">
+    <div class="pagina-topo__titulo">
+      <span class="pagina-topo__sobretitulo"><app-icone nome="configuracoes" [tamanho]="14" /> Configurações</span>
+      <h1>Configurações da clínica</h1>
+      <p class="pagina-topo__subtitulo">Credenciais de IA e destino da nota clínica. Ajustes de clínica, não de usuário.</p>
+    </div>
   </div>
 
   @if (erro()) {
-    <p class="aviso aviso--erro" role="alert">{{ erro() }}</p>
+    <p class="aviso aviso--erro" role="alert"><app-icone nome="alerta" [tamanho]="16" /> {{ erro() }}</p>
   }
   @if (sucesso()) {
-    <p class="aviso aviso--sucesso" role="status">{{ sucesso() }}</p>
+    <p class="aviso aviso--sucesso" role="status"><app-icone nome="concluido" [tamanho]="16" /> {{ sucesso() }}</p>
   }
 
-  <div class="cartao">
-    <div class="cartao__corpo">
-      <h2>Transcrição automática</h2>
-      <p class="secao__texto">
-        Credenciais da OpenAI usadas para transcrever a consulta e gerar o rascunho do prontuário.
-      </p>
+  <section class="cartao">
+    <div class="cartao__topo">
+      <div class="cartao__titulo">
+        <span class="cartao__titulo-icone"><app-icone nome="ia" [tamanho]="16" /></span>
+        <div>
+          <h2>Transcrição e IA</h2>
+          <p class="secao__texto">Credenciais da OpenAI usadas para transcrever a consulta e preencher o prontuário.</p>
+        </div>
+      </div>
+    </div>
 
+    <div class="cartao__corpo corpo">
       @if (carregando()) {
-        <div class="vazio">Carregando configuração…</div>
+        <div class="vazio"><span class="giro"></span> Carregando configuração…</div>
       } @else {
         <div class="estado" [class.estado--ativo]="configuracao()?.chaveConfigurada">
-          <span class="estado__ponto" aria-hidden="true"></span>
+          <span class="estado__icone">
+            <app-icone [nome]="configuracao()?.chaveConfigurada ? 'concluido' : 'alerta'" />
+          </span>
           <div>
             @if (configuracao()?.chaveConfigurada) {
-              <strong>Transcrição automática ativa</strong>
+              <strong>Transcrição ao vivo ativa</strong>
               <small>
                 Chave terminada em …{{ configuracao()?.chaveApiSufixo }}
-                @if (configuracao()?.atualizadoEm; as em) {
-                  · atualizada em {{ em | date: "dd/MM/y 'às' HH:mm" }}
-                }
+                @if (configuracao()?.atualizadoEm; as em) { · atualizada em {{ em | date: "dd/MM/y 'às' HH:mm" }} }
               </small>
             } @else {
-              <strong>Transcrição automática inativa</strong>
-              <small>Cadastre uma chave para que o rascunho seja gerado a partir do áudio.</small>
+              <strong>Transcrição inativa</strong>
+              <small>Cadastre uma chave para que a consulta seja transcrita e o prontuário preenchido.</small>
             }
           </div>
         </div>
 
         <form [formGroup]="form" (ngSubmit)="salvar()" novalidate>
           <div class="campo">
-            <label class="campo__rotulo" for="chave">Chave da API da OpenAI</label>
-            <input id="chave" type="password" formControlName="chaveApi" autocomplete="off"
-                   spellcheck="false"
+            <label class="campo__rotulo" for="chave"><app-icone nome="chave" [tamanho]="15" /> Chave da API da OpenAI</label>
+            <input id="chave" type="password" formControlName="chaveApi" autocomplete="off" spellcheck="false"
                    [placeholder]="configuracao()?.chaveConfigurada ? 'Deixe em branco para manter a atual' : 'sk-…'" />
             <span class="campo__dica">
-              Guardada cifrada no servidor e nunca devolvida por nenhuma tela. Gere em
-              platform.openai.com/api-keys.
+              Guardada cifrada no servidor e nunca devolvida por nenhuma tela. O navegador recebe só chaves
+              temporárias, válidas por minutos.
             </span>
           </div>
 
           <div class="dupla">
             <div class="campo">
               <label class="campo__rotulo" for="modelo-transcricao">Modelo de transcrição</label>
-              <input id="modelo-transcricao" type="text" formControlName="modeloTranscricao"
-                     autocomplete="off" spellcheck="false" />
-              <span class="campo__dica">Padrão: whisper-1. Para mais precisão em termos médicos, use gpt-4o-transcribe.</span>
+              <input id="modelo-transcricao" type="text" formControlName="modeloTranscricao" autocomplete="off" spellcheck="false" />
+              <span class="campo__dica">Padrão: gpt-4o-transcribe (melhor com termos médicos). Também aceita gpt-4o-mini-transcribe.</span>
             </div>
 
             <div class="campo">
-              <label class="campo__rotulo" for="modelo-texto">Modelo de extração</label>
-              <input id="modelo-texto" type="text" formControlName="modeloTexto"
-                     autocomplete="off" spellcheck="false" />
-              <span class="campo__dica">
-                Precisa suportar Structured Outputs — gpt-4o, gpt-4o-mini, gpt-4.1.
-              </span>
+              <label class="campo__rotulo" for="modelo-ao-vivo">Preenchimento durante a consulta</label>
+              <input id="modelo-ao-vivo" type="text" formControlName="modeloTextoAoVivo" autocomplete="off" spellcheck="false" />
+              <span class="campo__dica">Refaz o rascunho a cada poucas falas: modelo rápido e barato. Padrão: gpt-4o-mini.</span>
+            </div>
+
+            <div class="campo">
+              <label class="campo__rotulo" for="modelo-texto">Passada final e documentos</label>
+              <input id="modelo-texto" type="text" formControlName="modeloTexto" autocomplete="off" spellcheck="false" />
+              <span class="campo__dica">Ao encerrar a consulta. Precisa suportar Structured Outputs — gpt-4o, gpt-4.1.</span>
             </div>
           </div>
 
           <div class="acoes">
             <button type="submit" class="botao" [disabled]="salvando()">
-              {{ salvando() ? 'Salvando…' : 'Salvar' }}
+              @if (salvando()) { <span class="giro"></span> Salvando… } @else { <app-icone nome="check" [tamanho]="16" /> Salvar }
             </button>
-
             @if (configuracao()?.chaveConfigurada) {
-              <button type="button" class="botao botao--secundario" (click)="remover()">
-                Remover chave
-              </button>
+              <button type="button" class="botao botao--secundario" (click)="remover()">Remover chave</button>
             }
           </div>
         </form>
 
-        <p class="rodape-nota">
-          O áudio da consulta é enviado à OpenAI para transcrição. Confirme que isso é compatível
-          com a política de privacidade da clínica e com o consentimento obtido do paciente.
-        </p>
+        <ul class="privacidade">
+          <li>
+            <app-icone nome="microfone-desligado" [tamanho]="16" />
+            <span><strong>Sem gravação.</strong> No modo tempo real o áudio vai do navegador direto à OpenAI e volta como texto; no modo por trechos, cada pedaço de segundos é transcrito em memória e descartado.</span>
+          </li>
+          <li>
+            <app-icone nome="privacidade" [tamanho]="16" />
+            <span><strong>Sanitização local.</strong> Nome, CPF, telefone, endereço e outros identificadores são trocados por marcadores aqui no servidor, antes de o texto ir ao modelo de preenchimento ou ao banco.</span>
+          </li>
+          <li>
+            <app-icone [nome]="reconhecimentoNomes() ? 'concluido' : 'alerta'" [tamanho]="16" />
+            @if (reconhecimentoNomes()) {
+              <span><strong>Reconhecimento de nomes ativo.</strong> Um modelo de linguagem roda dentro da infraestrutura da clínica e retira nomes que nenhuma lista conhece. Se ele cair, nada é enviado à IA até voltar.</span>
+            } @else {
+              <span><strong>Reconhecimento de nomes desligado.</strong> A sanitização usa dicionário, padrões e lista de nomes. Configure <code>Privacidade:Ner:Url</code> para ligar o modelo local.</span>
+            }
+          </li>
+          <li>
+            <app-icone nome="info" [tamanho]="16" />
+            <span>Para saúde, peça à OpenAI a retenção zero de dados (Zero Data Retention) e formalize o contrato de tratamento de dados.</span>
+          </li>
+        </ul>
       }
     </div>
-  </div>
+  </section>
 
   <app-configuracao-exportacao />
 </div>

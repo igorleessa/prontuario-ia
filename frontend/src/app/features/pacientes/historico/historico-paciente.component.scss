@@ -1,101 +1,111 @@
-.pagina {
+.ficha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.125rem;
+  padding: 1.375rem 1.5rem;
+  background:
+    radial-gradient(120% 140% at 100% 0%, var(--primary-suave) 0%, transparent 55%),
+    var(--superficie);
+}
+
+.ficha__info {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  max-width: 48rem;
-}
-
-.voltar {
-  display: inline-flex;
-  align-items: center;
   gap: 0.375rem;
-  align-self: flex-start;
-  font-size: 0.875rem;
-  color: var(--texto-suave);
+  flex: 1;
+  min-width: 12rem;
 }
 
-.voltar:hover { color: var(--texto); }
-
-.ficha__meta {
-  margin-top: 0.375rem;
+.ficha__dados {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8125rem;
   color: var(--texto-suave);
-  font-size: 0.875rem;
+
+  li { display: inline-flex; align-items: center; gap: 0.375rem; }
+}
+
+.ficha__numeros {
+  display: flex;
+  gap: 1.5rem;
+  padding: 0 1rem;
+
+  div { display: flex; flex-direction: column; line-height: 1.2; }
+  strong { font-size: 1.5rem; font-weight: 700; }
+  small { font-size: 0.75rem; color: var(--texto-tenue); }
 }
 
 .linha-do-tempo {
+  position: relative;
+  margin: 0;
+  padding: 1.25rem 1.5rem 1.5rem;
   list-style: none;
-  margin-top: 1.25rem;
-  display: flex;
-  flex-direction: column;
 }
 
 .evento {
   position: relative;
   display: flex;
-  gap: 0.875rem;
+  gap: 1rem;
   padding-bottom: 1rem;
 }
 
-/* A linha liga os marcadores; o ultimo evento nao a prolonga. */
 .evento:not(:last-child)::before {
   content: '';
   position: absolute;
-  left: 0.3125rem;
-  top: 1.125rem;
+  left: 0.9375rem;
+  top: 2rem;
   bottom: 0;
-  width: 1px;
+  width: 2px;
   background: var(--borda);
 }
 
 .evento__marca {
-  flex-shrink: 0;
-  width: 0.6875rem;
-  height: 0.6875rem;
-  margin-top: 0.375rem;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
   border-radius: 50%;
-  border: 2px solid var(--borda);
-  background: var(--superficie);
+  background: var(--superficie-3);
+  color: var(--texto-tenue);
+  flex-shrink: 0;
+  z-index: 1;
 }
+
+.evento--assinado .evento__marca { background: var(--sucesso-suave); color: var(--sucesso); }
 
 .evento__corpo {
   flex: 1;
-  display: block;
-  padding: 0.75rem 1rem;
+  min-width: 0;
+  padding: 0.875rem 1rem;
   border: 1px solid var(--borda);
-  border-radius: var(--raio);
+  border-radius: var(--raio-g);
   color: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.evento__corpo:hover { border-color: var(--texto-tenue); }
+.evento__corpo:hover { text-decoration: none; border-color: var(--primary-borda); box-shadow: var(--sombra); }
 
 .evento__topo {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
 
-  strong {
-    font-size: 0.9375rem;
-    font-weight: 560;
-  }
+  small { color: var(--texto-tenue); font-size: 0.8125rem; }
+  .selo { margin-left: auto; }
 }
 
-.evento__medico {
-  margin-top: 0.125rem;
-  font-size: 0.8125rem;
-  color: var(--texto-tenue);
-}
+.evento__campos {
+  display: grid;
+  gap: 0.375rem;
+  margin: 0.75rem 0 0;
 
-.evento__campo {
-  margin-top: 0.5rem;
-  font-size: 0.875rem;
-
-  span {
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--texto-tenue);
-    margin-right: 0.375rem;
-  }
+  div { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: 0.5rem; }
+  dt { font-size: 0.75rem; font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em; color: var(--primary-forte); padding-top: 0.125rem; }
+  dd { margin: 0; font-size: 0.875rem; color: var(--texto-suave); }
 }

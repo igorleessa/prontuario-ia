@@ -16,8 +16,9 @@ public class ConfiguracaoIAService : IConfiguracaoIAService
     /// </summary>
     private const string Proposito = "Prontuario.ConfiguracaoIA.ChaveApi";
 
-    private const string ModeloTranscricaoPadrao = "whisper-1";
+    private const string ModeloTranscricaoPadrao = "gpt-4o-transcribe";
     private const string ModeloTextoPadrao = "gpt-4o";
+    private const string ModeloTextoAoVivoPadrao = "gpt-4o-mini";
 
     private readonly ApplicationDbContext _db;
     private readonly IDataProtector _protetor;
@@ -41,13 +42,15 @@ public class ConfiguracaoIAService : IConfiguracaoIAService
         var configuracao = await BuscarAsync(clinicaId, cancellationToken);
 
         return configuracao is null
-            ? new ConfiguracaoIADto(false, null, ModeloTranscricaoPadrao, ModeloTextoPadrao, null)
+            ? new ConfiguracaoIADto(
+                false, null, ModeloTranscricaoPadrao, ModeloTextoPadrao, null, ModeloTextoAoVivoPadrao)
             : new ConfiguracaoIADto(
                 true,
                 configuracao.ChaveApiSufixo,
                 configuracao.ModeloTranscricao,
                 configuracao.ModeloTexto,
-                configuracao.AtualizadoEm);
+                configuracao.AtualizadoEm,
+                configuracao.ModeloTextoAoVivo);
     }
 
     public async Task<ConfiguracaoIADto> SalvarAsync(
@@ -75,6 +78,7 @@ public class ConfiguracaoIAService : IConfiguracaoIAService
 
         configuracao.ModeloTranscricao = Ou(dados.ModeloTranscricao, ModeloTranscricaoPadrao);
         configuracao.ModeloTexto = Ou(dados.ModeloTexto, ModeloTextoPadrao);
+        configuracao.ModeloTextoAoVivo = Ou(dados.ModeloTextoAoVivo, ModeloTextoAoVivoPadrao);
         configuracao.AtualizadoEm = DateTime.UtcNow;
         configuracao.AtualizadoPorId = usuarioId;
 
@@ -85,7 +89,7 @@ public class ConfiguracaoIAService : IConfiguracaoIAService
 
         return new ConfiguracaoIADto(
             true, configuracao.ChaveApiSufixo, configuracao.ModeloTranscricao,
-            configuracao.ModeloTexto, configuracao.AtualizadoEm);
+            configuracao.ModeloTexto, configuracao.AtualizadoEm, configuracao.ModeloTextoAoVivo);
     }
 
     public async Task<bool> RemoverChaveAsync(Guid clinicaId, CancellationToken cancellationToken = default)
@@ -117,7 +121,8 @@ public class ConfiguracaoIAService : IConfiguracaoIAService
         try
         {
             var chave = _protetor.Unprotect(configuracao.ChaveApiProtegida);
-            return new CredenciaisIA(chave, configuracao.ModeloTranscricao, configuracao.ModeloTexto);
+            return new CredenciaisIA(
+                chave, configuracao.ModeloTranscricao, configuracao.ModeloTexto, configuracao.ModeloTextoAoVivo);
         }
         catch (Exception excecao)
         {

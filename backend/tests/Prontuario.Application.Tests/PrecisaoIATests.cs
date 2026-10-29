@@ -47,3 +47,40 @@ public class PrecisaoIATests
         Assert.Equal("J06.9", normalizado.Cid10Sugerido);
     }
 }
+
+public class OrigensRascunhoTests
+{
+    [Fact]
+    public void LerOrigens_AceitaListasDeInteirosEIgnoraOResto()
+    {
+        const string resposta = """
+            {"queixaPrincipal":"Tosse.","origens":{"queixaPrincipal":[3,3,5],"hda":[],"conduta":"x","exameFisico":[1.5,"2"]}}
+            """;
+
+        var origens = Prontuario.Infrastructure.Services.OpenAiClinicalNoteGenerator.LerOrigens(resposta);
+
+        Assert.Equal([3, 5], origens["queixaPrincipal"]);
+        Assert.Single(origens);
+    }
+
+    [Fact]
+    public void LerOrigens_SemOrigens_DevolveVazio()
+        => Assert.Empty(Prontuario.Infrastructure.Services.OpenAiClinicalNoteGenerator.LerOrigens("""{"hda":null}"""));
+}
+
+public class FalantesRascunhoTests
+{
+    [Fact]
+    public void LerFalantes_NormalizaEIgnoraOQueNaoEhFalanteConhecido()
+    {
+        const string resposta = """
+            {"falantes":[{"trecho":0,"falante":"medico"},{"trecho":1,"falante":"PACIENTE"},{"trecho":2,"falante":"enfermeira"},{"trecho":"x","falante":"medico"}]}
+            """;
+
+        var falantes = Prontuario.Infrastructure.Services.OpenAiClinicalNoteGenerator.LerFalantes(resposta);
+
+        Assert.Equal("Medico", falantes[0]);
+        Assert.Equal("Paciente", falantes[1]);
+        Assert.Equal(2, falantes.Count);
+    }
+}

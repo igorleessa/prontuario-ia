@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Prontuario.Application.Common.Interfaces;
 using Prontuario.Application.Common.Models;
+using Prontuario.Application.Privacidade;
 
 namespace Prontuario.Infrastructure.Services;
 
@@ -26,6 +27,13 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
           tecnicos apenas quando a correcao for inequivoca (ex.: "lozartana" -> losartana).
           Na duvida, mantenha o que foi transcrito.
 
+        Sobre os dados pessoais:
+        - A transcricao foi pseudonimizada antes de chegar aqui. Marcadores entre colchetes
+          ([PACIENTE], [MEDICO], [PESSOA], [CPF], [TELEFONE], [ENDERECO], [DOCUMENTO]...)
+          substituem nomes e identificadores. Nunca tente adivinhar o valor original.
+        - Refira-se ao paciente como "paciente" e nao copie marcadores para o registro, a nao
+          ser que o dado seja clinicamente necessario (ex.: "acompanhado pela filha").
+
         Regras obrigatorias:
         - Use exclusivamente informacao presente na transcricao. Nunca invente sintomas,
           medicamentos, doses, resultados de exame ou diagnosticos.
@@ -41,6 +49,19 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
         - Nao repita a mesma informacao em mais de um campo; coloque-a no campo mais especifico.
         - Escreva em portugues do Brasil, em terceira pessoa, no registro tecnico usado
           em prontuario, de forma concisa, sem repetir o dialogo literalmente.
+
+        Origem de cada campo:
+        - Cada trecho da transcricao comeca com o seu numero entre colchetes ("[12] ...").
+        - Em "origens", para cada campo, liste os numeros dos trechos de onde tirou o conteudo
+          dele, em ordem. Campo null tem lista vazia. Nao cite trecho que nao sustente o campo.
+
+        Quem fala:
+        - A transcricao nao separa as vozes. Em "falantes", diga quem disse cada trecho
+          ("medico", "paciente" ou "acompanhante"), pelo conteudo: perguntas, exame, raciocinio
+          e prescricao costumam ser do medico; relato de sintomas e historia, do paciente;
+          quem fala do paciente na terceira pessoa ("ela esta com febre") e acompanhante.
+        - Trecho que ja chega com o falante entre parenteses foi confirmado pelo medico: use
+          como esta. Trecho que mistura falas fica com quem fala a maior parte.
 
         O que vai em cada campo:
         - queixaPrincipal: o motivo da consulta em uma frase curta, com a duracao quando dita
@@ -62,14 +83,25 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
           atestado, encaminhamentos e retorno.
         """;
 
+    /// <summary>
+    /// Nos documentos o nome do paciente e preenchido depois, a partir do
+    /// cadastro: o marcador e o que garante que ele saia do lugar certo.
+    /// </summary>
+    private const string InstrucaoMarcadores = """
+
+        Dados pessoais chegam pseudonimizados por marcadores entre colchetes ([PACIENTE], [PESSOA],
+        [CPF]...). Quando o documento precisar do nome do paciente, escreva exatamente [PACIENTE];
+        nunca invente nome, documento ou endereco.
+        """;
+
     private static readonly JsonSerializerOptions OpcoesJson = new(JsonSerializerDefaults.Web);
 
     private readonly IHttpClientFactory _fabrica;
 
     public OpenAiClinicalNoteGenerator(IHttpClientFactory fabrica) => _fabrica = fabrica;
 
-    public async Task<RascunhoClinicoDto> GerarRascunhoAsync(
-        string transcricao,
+    public async Task<RascunhoComOrigensDto> GerarRascunhoAsync(
+        TextoSanitizado transcricao,
         CredenciaisIA credenciais,
         ContextoGeracao contexto,
         CancellationToken cancellationToken = default)
@@ -81,7 +113,7 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
             messages = new object[]
             {
                 new { role = "system", content = ComContexto(Instrucao, contexto) },
-                new { role = "user", content = $"Transcricao da consulta:\n\n<transcricao>\n{transcricao}\n</transcricao>" },
+                new { role = "user", content = $"Transcricao da consulta:\n\n<transcricao>\n{transcricao.Valor}\n</transcricao>" },
             },
             response_format = new
             {
@@ -126,7 +158,73 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
         var rascunho = JsonSerializer.Deserialize<RascunhoClinicoDto>(conteudo, OpcoesJson)
             ?? throw new InvalidOperationException("Nao foi possivel interpretar o rascunho devolvido pela IA.");
 
-        return Normalizar(rascunho);
+        return new RascunhoComOrigensDto(Normalizar(rascunho), LerOrigens(conteudo), LerFalantes(conteudo));
+    }
+
+    /// <summary>Falante por trecho; entrada fora do formato e ignorada.</summary>
+    internal static IReadOnlyDictionary<int, string> LerFalantes(string conteudo)
+    {
+        using var json = JsonDocument.Parse(conteudo);
+        var resultado = new Dictionary<int, string>();
+
+        if (!json.RootElement.TryGetProperty("falantes", out var falantes) || falantes.ValueKind != JsonValueKind.Array)
+        {
+            return resultado;
+        }
+
+        foreach (var item in falantes.EnumerateArray())
+        {
+            if (item.ValueKind == JsonValueKind.Object
+                && item.TryGetProperty("trecho", out var trecho)
+                && trecho.ValueKind == JsonValueKind.Number && trecho.TryGetInt32(out var sequencia)
+                && item.TryGetProperty("falante", out var falante)
+                && falante.ValueKind == JsonValueKind.String && falante.GetString() is { } nome
+                && NomesFalantes.TryGetValue(nome, out var normalizado))
+            {
+                resultado[sequencia] = normalizado;
+            }
+        }
+
+        return resultado;
+    }
+
+    private static readonly Dictionary<string, string> NomesFalantes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["medico"] = "Medico",
+        ["paciente"] = "Paciente",
+        ["acompanhante"] = "Acompanhante",
+    };
+
+    /// <summary>Origens por campo; o que nao for lista de inteiros e ignorado, nao derruba o rascunho.</summary>
+    internal static IReadOnlyDictionary<string, IReadOnlyList<int>> LerOrigens(string conteudo)
+    {
+        using var json = JsonDocument.Parse(conteudo);
+        if (!json.RootElement.TryGetProperty("origens", out var origens) || origens.ValueKind != JsonValueKind.Object)
+        {
+            return RascunhoComOrigensDto.SemOrigens;
+        }
+
+        var resultado = new Dictionary<string, IReadOnlyList<int>>();
+        foreach (var campo in origens.EnumerateObject())
+        {
+            if (campo.Value.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            var numeros = campo.Value.EnumerateArray()
+                .Where(item => item.ValueKind == JsonValueKind.Number && item.TryGetInt32(out _))
+                .Select(item => item.GetInt32())
+                .Distinct()
+                .ToList();
+
+            if (numeros.Count > 0)
+            {
+                resultado[campo.Name] = numeros;
+            }
+        }
+
+        return resultado;
     }
 
     /// <summary>
@@ -175,18 +273,18 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
 
     public async Task<string> GerarDocumentoAsync(
         string tipo,
-        string transcricao,
-        RascunhoClinicoDto registroClinico,
+        TextoSanitizado transcricao,
+        RegistroSanitizado registroClinico,
         CredenciaisIA credenciais,
         ContextoGeracao contexto,
         CancellationToken cancellationToken = default)
     {
-        var instrucao = ComContexto(InstrucaoDocumento(tipo), contexto);
+        var instrucao = ComContexto(InstrucaoDocumento(tipo) + InstrucaoMarcadores, contexto);
 
         var conteudoUsuario = $"""
             Transcricao da consulta:
 
-            {transcricao}
+            {transcricao.Valor}
 
             Registro clinico revisado ate aqui:
 
@@ -311,14 +409,44 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
             ["conduta"] = "Prescricoes, exames, orientacoes, sinais de alarme, atestado, encaminhamento e retorno, um item por linha.",
         };
 
+        var propriedades = campos.ToDictionary(
+            campo => campo.Key,
+            campo => (object)new { type = new[] { "string", "null" }, description = campo.Value });
+
+        propriedades["origens"] = new
+        {
+            type = "object",
+            description = "Numeros dos trechos da transcricao que sustentam cada campo.",
+            additionalProperties = false,
+            required = campos.Keys.ToArray(),
+            properties = campos.Keys.ToDictionary(
+                campo => campo,
+                _ => (object)new { type = "array", items = new { type = "integer" } }),
+        };
+
+        propriedades["falantes"] = new
+        {
+            type = "array",
+            description = "Quem disse cada trecho da transcricao.",
+            items = new
+            {
+                type = "object",
+                additionalProperties = false,
+                required = new[] { "trecho", "falante" },
+                properties = new Dictionary<string, object>
+                {
+                    ["trecho"] = new { type = "integer" },
+                    ["falante"] = new { type = "string", @enum = new[] { "medico", "paciente", "acompanhante" } },
+                },
+            },
+        };
+
         return new
         {
             type = "object",
             additionalProperties = false,
-            required = campos.Keys.ToArray(),
-            properties = campos.ToDictionary(
-                campo => campo.Key,
-                campo => (object)new { type = new[] { "string", "null" }, description = campo.Value }),
+            required = propriedades.Keys.ToArray(),
+            properties = propriedades,
         };
     }
 }

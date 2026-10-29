@@ -1,12 +1,11 @@
 import { DatePipe } from '@angular/common';
 import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import {
-  CLASSE_STATUS,
-  HistoricoPaciente,
-  ROTULO_STATUS,
-} from '../../../core/models/atendimento.model';
+import { CLASSE_STATUS, HistoricoPaciente, ROTULO_STATUS } from '../../../core/models/atendimento.model';
 import { PacienteService } from '../../../core/services/paciente.service';
+import { AvatarComponent } from '../../../shared/avatar.component';
+import { IconeComponent } from '../../../shared/icone.component';
+import { cpfMascarado, idade } from '../../../shared/pessoa';
 
 /**
  * Linha do tempo de atendimentos do paciente (RF16). Na Modalidade B o registro
@@ -15,7 +14,7 @@ import { PacienteService } from '../../../core/services/paciente.service';
 @Component({
   selector: 'app-historico-paciente',
   standalone: true,
-  imports: [RouterLink, DatePipe],
+  imports: [RouterLink, DatePipe, IconeComponent, AvatarComponent],
   templateUrl: './historico-paciente.component.html',
   styleUrl: './historico-paciente.component.scss',
 })
@@ -31,22 +30,9 @@ export class HistoricoPacienteComponent {
   readonly rotuloStatus = ROTULO_STATUS;
   readonly classeStatus = CLASSE_STATUS;
 
-  readonly idade = computed(() => {
-    const nascimento = this.historico()?.dataNascimento;
-    if (!nascimento) {
-      return null;
-    }
-
-    const data = new Date(nascimento);
-    const hoje = new Date();
-    let anos = hoje.getFullYear() - data.getFullYear();
-
-    const aniversarioAindaNaoOcorreu =
-      hoje.getMonth() < data.getMonth() ||
-      (hoje.getMonth() === data.getMonth() && hoje.getDate() < data.getDate());
-
-    return `${aniversarioAindaNaoOcorreu ? anos - 1 : anos} anos`;
-  });
+  readonly idade = computed(() => idade(this.historico()?.dataNascimento));
+  readonly cpf = computed(() => cpfMascarado(this.historico()?.cpf));
+  readonly finalizados = computed(() => this.historico()?.atendimentos.filter((a) => a.finalizado).length ?? 0);
 
   constructor() {
     effect(() => this.carregar(this.id()), { allowSignalWrites: true });
