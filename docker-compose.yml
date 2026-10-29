@@ -15,6 +15,17 @@ services:
       timeout: 5s
       retries: 20
 
+  # Reconhecimento de nomes da sanitizacao. Sem porta publicada: so o backend
+  # o alcanca, pela rede interna do compose, e o texto nao sai da maquina.
+  privacidade-ner:
+    build:
+      context: ./servicos/privacidade-ner
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/saude')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
   backend:
     build:
       context: ./backend
@@ -47,6 +58,11 @@ services:
       # real desligado (rede que bloqueia WebRTC com a OpenAI), o navegador
       # envia trechos de segundos, transcritos em memoria e descartados.
       Transcricao__TempoRealHabilitado: ${TRANSCRICAO_TEMPO_REAL:-true}
+      # Reconhecedor de nomes local. Fora do ar, a fala e guardada com as outras
+      # camadas da sanitizacao, mas nada vai para a IA ate ele voltar.
+      Privacidade__Ner__Url: http://privacidade-ner:8000
+      # PER (pessoas) por padrao; acrescente LOC e ORG para retirar lugares e organizacoes.
+      Privacidade__Ner__Categorias: ${NER_CATEGORIAS:-PER}
       # Libera o botao "Simular consulta", que envia as falas de uma consulta
       # ficticia como se viessem da transcricao - a demonstracao nao depende de microfone.
       Demonstracao__Habilitado: ${DEMONSTRACAO_HABILITADA:-true}
@@ -64,6 +80,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      privacidade-ner:
+        condition: service_started
 
   frontend:
     build:
