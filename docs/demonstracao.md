@@ -38,25 +38,35 @@ o que se espera de uma nota de cardiologia não é o que se espera de uma pediá
 
 ### 3. Consentimento (20 s)
 
-Mostre a tela de consentimento. Diga: *"a gravação só começa depois do aceite, e
-o aceite fica registrado com data e hora. Isso é exigência da LGPD, não enfeite."*
+Mostre a tela de consentimento e leia o roteiro em voz alta. Diga: *"nada é
+gravado — a conversa vira texto na hora e o áudio é descartado. E a transcrição
+só começa depois do aceite, que fica registrado com data e hora."*
 
 ### 4. A consulta (60 s)
 
 Duas opções:
 
-- **Com áudio real**: grave 30–60 segundos simulando uma consulta com alguém da
-  sala. É mais convincente, mas depende de microfone.
-- **Consulta simulada**: clique em **Simular consulta**. Roda o pipeline inteiro
-  sobre uma gravação fictícia de exemplo. Use esta se a reunião for remota ou se
-  o ambiente for desconhecido.
+- **Com voz real**: clique em **Iniciar escuta** e converse 1–2 minutos com
+  alguém da sala. É mais convincente, mas depende de microfone.
+- **Consulta simulada**: clique em **Simular consulta**. As falas de uma consulta
+  fictícia entram uma a uma, como se viessem da transcrição. Use esta se a reunião
+  for remota ou se o ambiente for desconhecido.
 
-Enquanto processa: *"a transcrição e a extração rodam em segundo plano — o médico
-não fica olhando para uma ampulheta."*
+Aponte duas coisas enquanto a consulta acontece:
+
+1. **O prontuário se preenche sozinho** à direita, campo a campo, com a etiqueta
+   **IA**. *"O médico conversa olhando para o paciente, não para o teclado."*
+2. **O contador de dados protegidos** e as etiquetas "nome protegido" e "telefone
+   protegido" na transcrição: a consulta de exemplo dita um CPF, um celular e o nome
+   da filha. *"Esses dados são retirados aqui no servidor antes de qualquer coisa
+   chegar à IA."*
+
+Edite um campo no meio da consulta: o texto do médico não é sobrescrito, e a
+novidade da IA aparece como sugestão para aceitar ou não.
 
 ### 5. A revisão (90 s) — o ponto alto
 
-Quando o rascunho aparecer:
+Clique em **Encerrar consulta**. A tela já está na revisão, com o rascunho completo:
 
 1. Percorra os campos preenchidos.
 2. Edite um campo qualquer. A etiqueta **"editado por você"** aparece ao lado.
@@ -98,13 +108,15 @@ clínico exposto.
 | "Precisamos trocar nosso prontuário?" | Não. A modalidade Conector é um add-on: a nota vai para o sistema de vocês. |
 | "E se a IA errar?" | Nada é salvo sem revisão. A tela mostra o que a IA sugeriu e o que o médico mudou. |
 | "E se a IA cair?" | O médico documenta manualmente no mesmo formulário; e há o botão de reprocessar. |
-| "Onde ficam os áudios?" | Em storage S3-compatível da clínica, apagados automaticamente após o prazo de retenção configurado. |
+| "Onde ficam os áudios?" | Em lugar nenhum: não há gravação. O áudio vira texto durante a consulta e é descartado. |
+| "A OpenAI vê o nome do paciente?" | O modelo que preenche o prontuário recebe só texto sanitizado: nome, CPF, telefone, endereço e documentos são trocados por marcadores aqui no servidor. A transcrição em si ouve a voz, por isso recomendamos retenção zero com a OpenAI. |
 | "Quem paga a OpenAI?" | A chave é da clínica, cadastrada por vocês. O custo é medido por consulta, sem intermediação. |
-| "Isso atende à LGPD?" | Consentimento registrado, trilha de auditoria imutável, acesso por papel e retenção definida. O contrato precisa deixar explícito que, após a exportação, o registro legal é o do EMR de destino. |
+| "Isso atende à LGPD?" | Consentimento registrado, sem gravação de áudio, dados pessoais sanitizados antes da IA, trilha de auditoria imutável e acesso por papel. O contrato precisa deixar explícito que, após a exportação, o registro legal é o do EMR de destino. |
 | "Dá para integrar com o nosso sistema?" | Webhook de saída e API de entrada, ambos documentados em `docs/integracao-emr.md`. Sem conector proprietário. |
 
 ## O que não prometer
 
 - Assinatura digital ICP-Brasil: não está implementada.
-- Transcrição em tempo real durante a fala: o processamento é em lote, ao final.
+- Identificação de quem fala (médico ou paciente) na transcrição: a IA deduz pelo contexto.
+- Anonimização total: dado pseudonimizado continua sendo dado pessoal pela LGPD.
 - Agenda, faturamento e TISS: fora do escopo, por decisão de produto.

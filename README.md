@@ -1,15 +1,15 @@
 # Prontuário IA
 
-Camada de IA que ouve a consulta médica, transcreve e devolve a nota clínica
-pronta para revisão — acoplável ao prontuário eletrônico que a clínica já usa,
-ou operando como prontuário próprio.
+Camada de IA que ouve a consulta médica e preenche o prontuário enquanto ela
+acontece, sem gravar o áudio, deixando a nota pronta para revisão — acoplável ao
+prontuário eletrônico que a clínica já usa, ou operando como prontuário próprio.
 
 O médico revisa e confirma. A IA nunca salva nem exporta sozinha.
 
 ## As duas modalidades
 
-O mesmo núcleo (consentimento → captura → transcrição → extração estruturada →
-revisão) atende dois modelos de negócio, escolhidos por configuração da clínica
+O mesmo núcleo (consentimento → transcrição ao vivo → sanitização → preenchimento
+dos campos → revisão) atende dois modelos de negócio, escolhidos por configuração da clínica
 (`Clinica.ModoOperacao`) — sem build nem deploy separado:
 
 | | **Integrado** | **Conector** |
@@ -22,17 +22,38 @@ revisão) atende dois modelos de negócio, escolhidos por configuração da clí
 ## O que o sistema faz hoje
 
 **Núcleo clínico**
-- Consentimento do paciente registrado com data e hora antes de qualquer gravação.
-- Captura de áudio no navegador, transcrição (Whisper) e extração estruturada
-  (GPT-4o com Structured Outputs) em segundo plano.
-- Tela de revisão campo a campo, com etiqueta no que o médico alterou e
-  comparação com a sugestão original da IA.
+- Consentimento do paciente registrado com data e hora antes de qualquer escuta.
+- **Transcrição ao vivo, sem gravação**: o navegador fala direto com a Realtime API
+  da OpenAI (WebRTC, com chave temporária emitida pelo backend), e o áudio nunca
+  passa pelo servidor nem é guardado. Se o tempo real não estiver disponível, a
+  escuta segue por trechos de poucos segundos, transcritos em memória e descartados.
+- **Prontuário preenchido durante a consulta**: o rascunho é refeito conforme a
+  fala chega, e os campos se preenchem na tela. O que o médico edita nunca é
+  sobrescrito — a novidade da IA aparece como sugestão para aceitar ou não.
+- Tela de revisão campo a campo, com etiqueta no que veio da IA e no que o médico
+  alterou, e comparação com a sugestão original.
 - Modelos de nota por especialidade (clínica geral, cardiologia, pediatria,
   ortopedia, psiquiatria, ginecologia) e preferências de redação por médico.
 - Receita, pedido de exame, atestado e encaminhamento redigidos a partir da
   mesma consulta, editáveis e exportáveis em PDF.
-- Falha da IA não bloqueia nada: o formulário continua preenchível à mão, e há
-  reprocessamento sem duplicar o atendimento.
+- Falha da IA não bloqueia nada: o formulário continua preenchível à mão, e o
+  rascunho pode ser refeito sobre a transcrição sem duplicar o atendimento.
+
+**Privacidade: sanitização antes da IA**
+- Camada local (sem nenhum serviço externo) entre a transcrição e todo o resto:
+  modelo de texto, banco e logs. Ver `backend/src/Prontuario.Application/Privacidade`.
+- Três camadas de detecção: dicionário do atendimento (nome, CPF, nascimento e
+  contato do paciente, vindos do cadastro, tolerante a variações de grafia),
+  padrões com validação (CPF e CNS com dígito verificador, telefone, e-mail, CEP,
+  endereço, números longos) e contexto de fala ("minha filha Mariana", "seu João").
+- Lista de proteção médica: epônimos (Parkinson, Murphy, Chagas…) e números
+  clínicos (doses, sinais vitais, "1.200.000 UI") não são apagados.
+- Os serviços de IA só aceitam o tipo `TextoSanitizado`, que só o sanitizador cria:
+  mandar texto bruto ao provedor vira erro de compilação.
+- No banco fica só a transcrição sanitizada. Os dados do paciente voltam à tela a
+  partir do cadastro; os de terceiros ficam apagados de vez.
+- A resposta da IA é conferida pelo mesmo detector: dado pessoal nela gera alerta
+  no log (só a categoria, nunca o valor).
 
 **Integração (modalidade Conector)**
 - Webhook assinado em HMAC-SHA256, com retentativas e status de entrega visível
@@ -49,10 +70,11 @@ revisão) atende dois modelos de negócio, escolhidos por configuração da clí
 - Prontuário confirmado é somente leitura — correção posterior exige adendo.
 - Chave de IA e segredo de webhook cifrados em repouso; chave de integração
   guardada como hash.
-- Expurgo automático do áudio bruto após o prazo de retenção configurado.
+- Nenhum áudio é armazenado em lugar algum: não há storage de arquivos.
 
-**Ainda não implementado**: assinatura digital ICP-Brasil, transcrição em tempo
-real durante a fala, agenda, faturamento e TISS.
+**Ainda não implementado**: assinatura digital ICP-Brasil, identificação de quem
+fala na transcrição, reconhecimento de nomes por modelo local (Presidio/NER),
+agenda, faturamento e TISS.
 
 ## Stack
 
@@ -61,8 +83,7 @@ real durante a fala, agenda, faturamento e TISS.
 | Frontend | Angular 18 (standalone + signals), SCSS |
 | Backend | ASP.NET Core 8 (Clean Architecture), JWT |
 | Banco | PostgreSQL 16 + EF Core |
-| Storage de áudio | MinIO (S3-compatible) |
-| IA | OpenAI Whisper + GPT-4o, atrás de interfaces trocáveis |
+| IA | OpenAI Realtime (gpt-4o-transcribe) + GPT-4o, atrás de interfaces trocáveis |
 | Orquestração | Docker Compose |
 
 A chave de IA é **da clínica**, cadastrada na própria interface: o custo por
@@ -107,7 +128,6 @@ Ao final o script mostra os endereços e os dois logins:
 - Frontend: http://localhost:4200
 - API (Swagger): http://localhost:8080/swagger
 - EMR de demonstração: http://localhost:9080
-- MinIO console: http://localhost:9001
 
 O `.env` gerado contém segredos e está no `.gitignore` — não versione.
 
@@ -137,8 +157,8 @@ O `ng serve` usa `proxy.conf.json` para encaminhar `/api` ao backend em
 | Variável | Para que serve |
 |---|---|
 | `SEED_MODO_OPERACAO` | `Integrado` ou `Conector` na clínica semeada |
-| `DEMONSTRACAO_HABILITADA` | Libera o botão "Simular consulta", que roda o pipeline sobre uma consulta fictícia |
-| `AUDIO_RETENCAO_DIAS` | Dias que o áudio bruto fica guardado depois de transcrito (0 desliga o expurgo) |
+| `DEMONSTRACAO_HABILITADA` | Libera o botão "Simular consulta", que envia as falas de uma consulta fictícia como se viessem da transcrição |
+| `TRANSCRICAO_TEMPO_REAL` | `false` força o envio por trechos, para redes que bloqueiam WebRTC com a OpenAI |
 | `MINUTOS_DOCUMENTACAO_MANUAL` | Linha de base usada no cálculo de tempo economizado |
 | `EMR_DEMO_SECRET` | Segredo que o EMR de demonstração usa para conferir a assinatura |
 

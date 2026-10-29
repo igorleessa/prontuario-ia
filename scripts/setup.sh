@@ -3,7 +3,7 @@
 # Setup do ambiente local do Prontuário IA (macOS / Linux).
 #
 # Pergunta usuário e senha do banco, gera a chave JWT, escreve o .env
-# e sobe tudo no Docker (Postgres, MinIO, backend e frontend).
+# e sobe tudo no Docker (Postgres, backend e frontend).
 #
 # Uso:
 #   ./scripts/setup.sh            # interativo
@@ -133,10 +133,6 @@ if [[ "$PULAR_PERGUNTAS" == false ]]; then
   BACKEND_PORT=$(perguntar "Porta da API" "8080")
   FRONTEND_PORT=$(perguntar "Porta do frontend" "4200")
 
-  MINIO_USER=$(perguntar "Usuário do MinIO (storage de áudio)" "prontuario")
-  # O MinIO se recusa a iniciar com senha de menos de 8 caracteres.
-  MINIO_PASSWORD=$(perguntar_senha "Senha do MinIO (mínimo 8 caracteres)" 8)
-
   # Segredo do webhook usado pelo EMR de demonstracao para conferir a assinatura.
   EMR_DEMO_SECRET=$(gerar_chave | tr -cd 'A-Za-z0-9' | head -c 32)
 
@@ -169,13 +165,9 @@ SEED_EMAIL_ADMIN=$SEED_EMAIL_ADMIN
 SEED_NOME_ADMIN=Administrador da Clinica
 SEED_MODO_OPERACAO=$SEED_MODO_OPERACAO
 
-MINIO_USER=$MINIO_USER
-MINIO_PASSWORD=$MINIO_PASSWORD
-MINIO_PORT=9000
-MINIO_CONSOLE_PORT=9001
-
-# Dias que o audio bruto fica guardado depois de transcrito (LGPD).
-AUDIO_RETENCAO_DIAS=30
+# Nenhum audio e gravado: a consulta e transcrita ao vivo pelo navegador.
+# false forca o envio por trechos (rede que bloqueia WebRTC com a OpenAI).
+TRANSCRICAO_TEMPO_REAL=true
 
 # Botao "Simular consulta" na tela do atendimento (demonstracao ao cliente).
 DEMONSTRACAO_HABILITADA=true
@@ -202,7 +194,6 @@ ler_env() { grep -E "^$1=" "$ENV_FILE" | head -n1 | cut -d= -f2-; }
 
 BACKEND_PORT=$(ler_env BACKEND_PORT)
 FRONTEND_PORT=$(ler_env FRONTEND_PORT)
-MINIO_CONSOLE_PORT=$(ler_env MINIO_CONSOLE_PORT)
 EMR_DEMO_PORT=$(ler_env EMR_DEMO_PORT)
 EMR_DEMO_SECRET=$(ler_env EMR_DEMO_SECRET)
 SEED_EMAIL=$(ler_env SEED_EMAIL)
@@ -235,7 +226,6 @@ if [[ "${API_OK:-false}" == true ]]; then
   ok "=== Ambiente pronto ==="
   echo "  Frontend:       http://localhost:${FRONTEND_PORT}"
   echo "  API (Swagger):  http://localhost:${BACKEND_PORT}/swagger"
-  echo "  MinIO console:  http://localhost:${MINIO_CONSOLE_PORT}"
   echo "  EMR de demo:    http://localhost:${EMR_DEMO_PORT}"
   echo
   echo "  Para demonstrar a modalidade Conector, cadastre em Configuracoes:"

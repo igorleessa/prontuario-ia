@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     Pergunta usuário e senha do banco, gera a chave JWT, escreve o .env
-    e sobe tudo no Docker (Postgres, MinIO, backend e frontend).
+    e sobe tudo no Docker (Postgres, backend e frontend).
 
 .PARAMETER Recriar
     Apaga os volumes e recria o banco do zero.
@@ -142,10 +142,6 @@ if (-not $PularPerguntas) {
     $BackendPort = Read-ComPadrao 'Porta da API' '8080'
     $FrontendPort = Read-ComPadrao 'Porta do frontend' '4200'
 
-    $MinioUser = Read-ComPadrao 'Usuario do MinIO (storage de audio)' 'prontuario'
-    # O MinIO se recusa a iniciar com senha de menos de 8 caracteres.
-    $MinioPassword = Read-Senha 'Senha do MinIO (minimo 8 caracteres)' 8
-
     Write-Info 'Gerando chave JWT aleatoria...'
     $JwtKey = New-ChaveAleatoria
 
@@ -178,13 +174,9 @@ SEED_NOME_MEDICO=$SeedNomeMedico
 SEED_NOME_CLINICA=$SeedNomeClinica
 SEED_MODO_OPERACAO=$SeedModoOperacao
 
-MINIO_USER=$MinioUser
-MINIO_PASSWORD=$MinioPassword
-MINIO_PORT=9000
-MINIO_CONSOLE_PORT=9001
-
-# Dias que o audio bruto fica guardado depois de transcrito (LGPD).
-AUDIO_RETENCAO_DIAS=30
+# Nenhum audio e gravado: a consulta e transcrita ao vivo pelo navegador.
+# false forca o envio por trechos (rede que bloqueia WebRTC com a OpenAI).
+TRANSCRICAO_TEMPO_REAL=true
 
 # Botao "Simular consulta" na tela do atendimento (demonstracao ao cliente).
 DEMONSTRACAO_HABILITADA=true
@@ -248,7 +240,6 @@ try {
         Write-Ok '=== Ambiente pronto ==='
         Write-Host "  Frontend:       http://localhost:$($config['FRONTEND_PORT'])"
         Write-Host "  API (Swagger):  http://localhost:$backendPort/swagger"
-        Write-Host "  MinIO console:  http://localhost:$($config['MINIO_CONSOLE_PORT'])"
         Write-Host "  EMR de demo:    http://localhost:$($config['EMR_DEMO_PORT'])"
         Write-Host ""
         Write-Host "  Para demonstrar a modalidade Conector, cadastre em Configuracoes:"
