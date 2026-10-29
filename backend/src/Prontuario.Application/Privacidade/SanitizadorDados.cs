@@ -27,6 +27,12 @@ public static class Marcadores
     public const string Endereco = "[ENDERECO]";
     public const string Documento = "[DOCUMENTO]";
 
+    /// <summary>Lugar apontado pelo reconhecedor de nomes, quando a clinica opta por retira-los.</summary>
+    public const string Local = "[LOCAL]";
+
+    /// <summary>Organizacao (empresa, escola) apontada pelo reconhecedor de nomes, quando habilitado.</summary>
+    public const string Organizacao = "[ORGANIZACAO]";
+
     /// <summary>Trecho que o proprio medico marcou como dado pessoal na transcricao.</summary>
     public const string DadoPessoal = "[DADO_PESSOAL]";
 }
@@ -77,6 +83,58 @@ public sealed partial class SanitizadorDados : ISanitizadorDados
         "janeiro", "fevereiro", "mar[cç]o", "abril", "maio", "junho",
         "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
     ];
+
+    private readonly IReconhecedorEntidades? _reconhecedor;
+
+    /// <param name="reconhecedor">
+    /// Camada estatistica opcional. Sem ela, a sanitizacao fica nas camadas de
+    /// dicionario, padroes e contexto.
+    /// </param>
+    public SanitizadorDados(IReconhecedorEntidades? reconhecedor = null) => _reconhecedor = reconhecedor;
+
+    public bool ReconhecimentoHabilitado => _reconhecedor?.Habilitado == true;
+
+    public async Task<TextoSanitizado> SanitizarAsync(
+        string texto, IdentidadeAtendimento identidade, CancellationToken cancellationToken = default)
+    {
+        // As camadas deterministicas vem primeiro: o reconhecedor so ve texto
+        // ja sem os dados do cadastro, e o que ele apontar e o que sobrou.
+        var basico = Sanitizar(texto, identidade);
+        if (!ReconhecimentoHabilitado || string.IsNullOrWhiteSpace(basico.Valor))
+        {
+            return basico;
+        }
+
+        IReadOnlyList<EntidadeReconhecida> entidades;
+        try
+        {
+            entidades = await _reconhecedor!.ReconhecerAsync(basico.Valor, cancellationToken);
+        }
+        catch (Exception excecao) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new ProtecaoIndisponivelException(
+                "O reconhecimento de nomes da protecao de dados nao respondeu.", excecao);
+        }
+
+        var contagem = new Dictionary<string, int>(basico.Substituicoes);
+        var valor = AplicarEntidades(basico.Valor, entidades, contagem);
+        return new TextoSanitizado(valor, contagem);
+    }
+
+    public async Task<RegistroSanitizado> SanitizarRegistroAsync(
+        RascunhoClinicoDto registro, IdentidadeAtendimento identidade, CancellationToken cancellationToken = default)
+    {
+        async Task<TextoSanitizado?> Campo(string? valor)
+            => valor is null ? null : await SanitizarAsync(valor, identidade, cancellationToken);
+
+        return new RegistroSanitizado(
+            await Campo(registro.QueixaPrincipal),
+            await Campo(registro.Hda),
+            await Campo(registro.Antecedentes),
+            await Campo(registro.ExameFisico),
+            await Campo(registro.HipoteseDiagnostica),
+            await Campo(registro.Conduta));
+    }
 
     public TextoSanitizado Sanitizar(string texto, IdentidadeAtendimento identidade)
     {
@@ -555,6 +613,124 @@ public sealed partial class SanitizadorDados : ISanitizadorDados
 
         return construtor.ToString();
     }
+
+    // ---------- Camada 4: reconhecimento estatistico ----------
+
+    /// <summary>
+    /// Leva ao texto o que o reconhecedor apontou, passando antes pelo filtro
+    /// clinico: o modelo nao sabe que "doenca de Parkinson" nao e uma pessoa,
+    /// nem que "Dores" abrindo a frase e queixa.
+    /// </summary>
+    internal static string AplicarEntidades(
+        string texto, IReadOnlyList<EntidadeReconhecida> entidades, Dictionary<string, int> contagem)
+    {
+        var trocas = new List<(int Inicio, int Fim, string Marcador)>();
+
+        foreach (var entidade in entidades.OrderBy(e => e.Inicio))
+        {
+            var marcador = entidade.Rotulo switch
+            {
+                "PER" => Marcadores.Pessoa,
+                "LOC" => Marcadores.Local,
+                "ORG" => Marcadores.Organizacao,
+                _ => null,
+            };
+
+            if (marcador is null || Localizar(texto, entidade) is not var (inicio, fim))
+            {
+                continue;
+            }
+
+            // So nome proprio: "Moro em Niteroi" chega como pessoa, mas "Moro" e verbo.
+            if (!entidade.Classes.Contains("PROPN"))
+            {
+                continue;
+            }
+
+            (inicio, fim) = SemPalavrasIniciaisComuns(texto, inicio, fim, entidade.Classes);
+            var trecho = texto[inicio..fim];
+            var palavras = trecho.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+            if (trecho.Contains('[') || trecho.Contains(']') || (inicio > 0 && texto[inicio - 1] is '[' or '_'))
+            {
+                continue;
+            }
+
+            if (palavras.Any(palavra => NaoSaoPessoa.Contains(Chave(palavra.Trim('.', ',')))) || AntesDeEponimo().IsMatch(texto[..inicio]))
+            {
+                continue;
+            }
+
+            var chave = Chave(palavras[0].Trim('.', ','));
+            var ambigua = PalavrasAmbiguas.Contains(chave) || LexicoNomes.Ambiguos.Contains(chave);
+            if (palavras.Length == 1 && ambigua && (entidade.InicioDeFrase || InicioDeFrase(texto, inicio)))
+            {
+                continue;
+            }
+
+            if (trocas.Count > 0 && inicio < trocas[^1].Fim)
+            {
+                continue;
+            }
+
+            trocas.Add((inicio, fim, marcador));
+        }
+
+        var construtor = new StringBuilder(texto);
+        foreach (var (inicio, fim, marcador) in trocas.AsEnumerable().Reverse())
+        {
+            construtor.Remove(inicio, fim - inicio).Insert(inicio, marcador);
+            Contar(contagem, marcador, 1);
+        }
+
+        return construtor.ToString();
+    }
+
+    /// <summary>
+    /// Posicao da entidade no texto. O servico conta caracteres Unicode e o
+    /// .NET conta unidades UTF-16; quando nao batem (emoji antes do nome), a
+    /// entidade e procurada pelo proprio texto perto da posicao informada.
+    /// </summary>
+    private static (int Inicio, int Fim)? Localizar(string texto, EntidadeReconhecida entidade)
+    {
+        if (entidade.Texto.Length == 0)
+        {
+            return null;
+        }
+
+        if (entidade.Inicio >= 0 && entidade.Fim <= texto.Length && entidade.Fim > entidade.Inicio
+            && string.CompareOrdinal(texto, entidade.Inicio, entidade.Texto, 0, entidade.Texto.Length) == 0)
+        {
+            return (entidade.Inicio, entidade.Inicio + entidade.Texto.Length);
+        }
+
+        var achado = texto.IndexOf(entidade.Texto, Math.Max(0, Math.Min(entidade.Inicio, texto.Length) - 8), StringComparison.Ordinal);
+        return achado < 0 ? null : (achado, achado + entidade.Texto.Length);
+    }
+
+    /// <summary>"Dr. Ubirajara" vira "Dr. [PESSOA]": titulo e artigo nao sao o nome.</summary>
+    private static (int Inicio, int Fim) SemPalavrasIniciaisComuns(
+        string texto, int inicio, int fim, IReadOnlyList<string> classes)
+    {
+        var palavras = texto[inicio..fim].Split(' ');
+        if (palavras.Length != classes.Count)
+        {
+            return (inicio, fim);
+        }
+
+        var pular = 0;
+        while (pular < classes.Count - 1 && classes[pular] != "PROPN")
+        {
+            pular++;
+        }
+
+        var deslocamento = palavras.Take(pular).Sum(palavra => palavra.Length + 1);
+        return (inicio + deslocamento, fim);
+    }
+
+    [GeneratedRegex(
+        @"\b(?i:doen[çc]a|s[íi]ndrome|sinal|teste|manobra|escala|mal|reflexo|crit[ée]rios?|classifica[çc][ãa]o|f[óo]rmula|m[ée]todo|t[ée]cnica|fen[ôo]meno|tr[íi]ade|ponto|lei|ductos?|c[ée]lulas?|bacilo)\s+(?i:de|do|da)\s*$")]
+    private static partial Regex AntesDeEponimo();
 
     // ---------- Utilitarios ----------
 

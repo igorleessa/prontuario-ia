@@ -19,6 +19,6 @@ public static partial class IdentidadeDoAtendimento
     /// <summary>Quantos marcadores de dado pessoal o texto sanitizado carrega.</summary>
     public static int ContarMarcadores(string textoSanitizado) => Marcador().Count(textoSanitizado);
 
-    [GeneratedRegex(@"\[(?:PACIENTE|MEDICO|CPF_PACIENTE|CONTATO_PACIENTE|DATA_NASCIMENTO|PESSOA|CPF|CNS|TELEFONE|EMAIL|CEP|ENDERECO|DOCUMENTO|DADO_PESSOAL)\]")]
+    [GeneratedRegex(@"\[(?:PACIENTE|MEDICO|CPF_PACIENTE|CONTATO_PACIENTE|DATA_NASCIMENTO|PESSOA|CPF|CNS|TELEFONE|EMAIL|CEP|ENDERECO|DOCUMENTO|DADO_PESSOAL|LOCAL|ORGANIZACAO)\]")]
     private static partial Regex Marcador();
 }

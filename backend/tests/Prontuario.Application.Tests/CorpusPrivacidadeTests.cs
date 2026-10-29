@@ -9,7 +9,7 @@ namespace Prontuario.Application.Tests;
 /// </summary>
 public class CorpusPrivacidadeTests
 {
-    private static readonly IdentidadeAtendimento Paciente = new(
+    internal static readonly IdentidadeAtendimento Paciente = new(
         "Maria Aparecida dos Santos", "390.533.447-05", new DateOnly(1958, 9, 4), "maria.santos@email.com", "Dr. Paulo Henrique Costa");
 
     public static TheoryData<string, string[], string[]> Casos() => new()

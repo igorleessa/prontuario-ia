@@ -309,6 +309,76 @@ public class TranscricaoConsultaServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ReconhecimentoForaDoAr_GuardaAFalaMasNaoMandaNadaAIA()
+    {
+        var reconhecedor = new ReconhecedorAlternavel { ForaDoAr = true };
+        var servico = CriarServico(new SanitizadorDados(reconhecedor));
+
+        var trecho = await servico.RegistrarTrechoAsync(
+            _atendimento.Id, _clinica.Id, new RegistrarTrechoDto(0, "Quem veio foi o Gervásio."));
+        var rascunho = await servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+
+        Assert.Equal(ResultadoAtendimento.Ok, trecho.Resultado);
+        Assert.False(_db.TrechosTranscricao.Single().ReconhecimentoAplicado);
+        Assert.Equal(ResultadoAtendimento.Falha, rascunho.Resultado);
+        await _llm.DidNotReceiveWithAnyArgs().GerarRascunhoAsync(default!, default!, default!, default);
+    }
+
+    [Fact]
+    public async Task ReconhecimentoDeVolta_CompletaOsTrechosPendentesAntesDaIA()
+    {
+        var reconhecedor = new ReconhecedorAlternavel { ForaDoAr = true };
+        var servico = CriarServico(new SanitizadorDados(reconhecedor));
+        await servico.RegistrarTrechoAsync(_atendimento.Id, _clinica.Id, new RegistrarTrechoDto(0, "Quem veio foi o Gervásio."));
+
+        reconhecedor.ForaDoAr = false;
+        TextoSanitizado? enviado = null;
+        _llm.GerarRascunhoAsync(
+                Arg.Do<TextoSanitizado>(texto => enviado = texto),
+                Arg.Any<CredenciaisIA>(), Arg.Any<ContextoGeracao>(), Arg.Any<CancellationToken>())
+            .Returns(ComOrigens(new RascunhoClinicoDto(null, null, null, null, null, null, null)));
+
+        var rascunho = await servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+
+        Assert.Equal(ResultadoAtendimento.Ok, rascunho.Resultado);
+        Assert.Equal("[0] Quem veio foi o [PESSOA].", enviado!.Valor);
+        Assert.True(_db.TrechosTranscricao.Single().ReconhecimentoAplicado);
+    }
+
+    /// <summary>Reconhece "Gervásio" como pessoa; pode ser desligado para simular o servico fora do ar.</summary>
+    private sealed class ReconhecedorAlternavel : IReconhecedorEntidades
+    {
+        public bool ForaDoAr { get; set; }
+        public bool Habilitado => true;
+
+        public Task<IReadOnlyList<EntidadeReconhecida>> ReconhecerAsync(string texto, CancellationToken cancellationToken = default)
+        {
+            if (ForaDoAr)
+            {
+                throw new HttpRequestException("connection refused");
+            }
+
+            var inicio = texto.IndexOf("Gervásio", StringComparison.Ordinal);
+            IReadOnlyList<EntidadeReconhecida> entidades = inicio < 0
+                ? []
+                : [new EntidadeReconhecida(inicio, inicio + 8, "PER", "Gervásio", ["PROPN"], false)];
+            return Task.FromResult(entidades);
+        }
+    }
+
+    private TranscricaoConsultaService CriarServico(ISanitizadorDados sanitizador) => new(
+        _db,
+        sanitizador,
+        _configuracoes,
+        _tempoReal,
+        _stt,
+        _llm,
+        Substitute.For<IAuditoriaService>(),
+        Options.Create(new TranscricaoOptions()),
+        NullLogger<TranscricaoConsultaService>.Instance,
+        new CofreTermosProtegidos(new EphemeralDataProtectionProvider()));
+
+    [Fact]
     public async Task Trecho_SemConsentimento_NaoEhGuardado()
     {
         _atendimento.ConsentimentoTranscricao = false;

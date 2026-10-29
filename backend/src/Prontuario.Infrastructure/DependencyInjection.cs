@@ -45,7 +45,23 @@ public static class DependencyInjection
         });
 
         // Toda saida para o provedor de IA passa pela sanitizacao local.
-        services.AddSingleton<ISanitizadorDados, SanitizadorDados>();
+        services.Configure<ReconhecimentoEntidadesOptions>(
+            configuration.GetSection(ReconhecimentoEntidadesOptions.SectionName));
+        services.AddHttpClient(ReconhecedorEntidadesSpacy.NomeCliente, (provedor, cliente) =>
+        {
+            var opcoes = provedor.GetRequiredService<Microsoft.Extensions.Options.IOptions<ReconhecimentoEntidadesOptions>>().Value;
+            if (!string.IsNullOrWhiteSpace(opcoes.Url))
+            {
+                cliente.BaseAddress = new Uri(opcoes.Url.TrimEnd('/') + "/");
+            }
+
+            // A fala espera por esta resposta: um servico travado vira
+            // "protecao indisponivel" rapido, e nao uma tela parada.
+            cliente.Timeout = TimeSpan.FromSeconds(opcoes.TimeoutSegundos);
+        });
+        services.AddSingleton<IReconhecedorEntidades, ReconhecedorEntidadesSpacy>();
+        services.AddSingleton<ISanitizadorDados>(
+            provedor => new SanitizadorDados(provedor.GetRequiredService<IReconhecedorEntidades>()));
         services.AddSingleton<CofreTermosProtegidos>();
 
         services.Configure<TranscricaoOptions>(configuration.GetSection(TranscricaoOptions.SectionName));

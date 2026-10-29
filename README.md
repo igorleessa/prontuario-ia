@@ -53,6 +53,15 @@ dos campos → revisão) atende dois modelos de negócio, escolhidos por configu
   endereço, números longos) e nomes de terceiros — por contexto de fala ("minha
   filha Mariana", "seu João") e por um léxico local de prenomes e sobrenomes
   brasileiros ("a Mariana Costa trouxe os exames").
+- **Reconhecimento de nomes por modelo local** (`servicos/privacidade-ner`): o
+  modelo de português do spaCy roda num container sem porta publicada e aponta
+  nomes que nenhuma lista conhece ("o Gervásio, meu cunhado"). O backend filtra o
+  que o modelo erra em contexto clínico: epônimos ("doença de Parkinson"), verbos
+  ("Moro em…") e palavras comuns no início da frase ("Dores nas costas").
+  Pessoas por padrão; lugares e organizações por `NER_CATEGORIAS=PER,LOC,ORG`.
+- **Falha sem vazamento**: com o reconhecedor fora do ar, a fala continua sendo
+  guardada (com as demais camadas) e fica pendente. Nada vai à IA até ele voltar
+  e passar pelos trechos pendentes.
 - **Correção pelo médico**: selecionar um trecho da transcrição e marcar como dado
   pessoal. Ele some da transcrição já guardada, vale para as próximas falas e
   para os documentos, e fica cifrado no banco (é o próprio dado pessoal).
@@ -86,7 +95,7 @@ dos campos → revisão) atende dois modelos de negócio, escolhidos por configu
 - Nenhum áudio é armazenado em lugar algum: não há storage de arquivos.
 
 **Ainda não implementado**: assinatura digital ICP-Brasil, identificação de quem
-fala na transcrição, reconhecimento de nomes por modelo estatístico local (NER),
+fala na transcrição,
 agenda, faturamento e TISS.
 
 ## Stack
@@ -97,6 +106,7 @@ agenda, faturamento e TISS.
 | Backend | ASP.NET Core 8 (Clean Architecture), JWT |
 | Banco | PostgreSQL 16 + EF Core |
 | IA | OpenAI Realtime (gpt-4o-transcribe) + GPT-4o, atrás de interfaces trocáveis |
+| Privacidade | Sanitização em .NET + reconhecimento de nomes local (Python, spaCy `pt_core_news_md`) |
 | Orquestração | Docker Compose |
 
 A chave de IA é **da clínica**, cadastrada na própria interface: o custo por
@@ -114,6 +124,7 @@ backend/
     Prontuario.EmrDemo/         EMR fictício para demonstrar a integração
   tests/
 frontend/                       SPA Angular
+servicos/privacidade-ner/       reconhecimento de nomes local (Python, spaCy)
 docs/                           especificação, plano, integração e roteiro de demo
 ```
 
@@ -171,6 +182,7 @@ O `ng serve` usa `proxy.conf.json` para encaminhar `/api` ao backend em
 |---|---|
 | `SEED_MODO_OPERACAO` | `Integrado` ou `Conector` na clínica semeada |
 | `DEMONSTRACAO_HABILITADA` | Libera o botão "Simular consulta", que envia as falas de uma consulta fictícia como se viessem da transcrição |
+| `NER_CATEGORIAS` | Entidades que o reconhecedor de nomes retira: `PER` (padrão), `LOC`, `ORG` |
 | `TRANSCRICAO_TEMPO_REAL` | `false` força o envio por trechos, para redes que bloqueiam WebRTC com a OpenAI |
 | `MINUTOS_DOCUMENTACAO_MANUAL` | Linha de base usada no cálculo de tempo economizado |
 | `EMR_DEMO_SECRET` | Segredo que o EMR de demonstração usa para conferir a assinatura |

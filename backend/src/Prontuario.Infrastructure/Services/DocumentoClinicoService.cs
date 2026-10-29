@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Prontuario.Application.Common.Interfaces;
 using Prontuario.Application.Common.Models;
+using Prontuario.Application.Privacidade;
 using Prontuario.Domain.Entities;
 using Prontuario.Domain.Enums;
 using Prontuario.Infrastructure.Persistence;
@@ -83,13 +84,21 @@ public class DocumentoClinicoService : IDocumentoClinicoService
         // paciente volta no fim, a partir do cadastro, no lugar do marcador.
         var identidade = IdentidadeDoAtendimento.De(
             atendimento.PacienteRef!, atendimento.Medico!, _termos.Ler(atendimento));
+        TextoSanitizado transcricaoSegura;
+        RegistroSanitizado registroSeguro;
+        try
+        {
+            transcricaoSegura = await _sanitizador.SanitizarAsync(transcricao, identidade, cancellationToken);
+            registroSeguro = await _sanitizador.SanitizarRegistroAsync(registro, identidade, cancellationToken);
+        }
+        catch (ProtecaoIndisponivelException)
+        {
+            throw new InvalidOperationException(
+                "A protecao de dados (reconhecimento de nomes) esta fora do ar; nada foi enviado a IA. Tente de novo em instantes.");
+        }
+
         var redigido = await _llm.GerarDocumentoAsync(
-            tipoDocumento.ToString(),
-            _sanitizador.Sanitizar(transcricao, identidade),
-            _sanitizador.SanitizarRegistro(registro, identidade),
-            credenciais,
-            contexto,
-            cancellationToken);
+            tipoDocumento.ToString(), transcricaoSegura, registroSeguro, credenciais, contexto, cancellationToken);
         var conteudo = _sanitizador.Reidentificar(redigido, identidade);
 
         // Um documento por tipo: regerar substitui, para o medico nao acabar com

@@ -14,4 +14,11 @@ public class TrechoTranscricao : BaseEntity
 
     public int Sequencia { get; set; }
     public string Texto { get; set; } = string.Empty;
+
+    /// <summary>
+    /// O reconhecimento estatistico de nomes ja passou por este trecho. Falso
+    /// quando o servico estava fora do ar ao guardar a fala: o trecho so vai
+    /// para a IA depois de passar por ele.
+    /// </summary>
+    public bool ReconhecimentoAplicado { get; set; }
 }

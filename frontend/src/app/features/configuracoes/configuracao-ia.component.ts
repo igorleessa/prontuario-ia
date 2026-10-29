@@ -3,6 +3,7 @@ import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ConfiguracaoIA } from '../../core/models/configuracao-ia.model';
+import { AppConfigService } from '../../core/services/app-config.service';
 import { ConfiguracaoIAService } from '../../core/services/configuracao-ia.service';
 import { ConfiguracaoExportacaoComponent } from './exportacao/configuracao-exportacao.component';
 import { IconeComponent } from '../../shared/icone.component';
@@ -16,6 +17,8 @@ import { IconeComponent } from '../../shared/icone.component';
 })
 export class ConfiguracaoIAComponent {
   private readonly configuracoes = inject(ConfiguracaoIAService);
+
+  readonly reconhecimentoNomes = inject(AppConfigService).reconhecimentoNomes;
 
   readonly carregando = signal(true);
   readonly salvando = signal(false);

@@ -523,6 +523,9 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CriadoEm")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("ReconhecimentoAplicado")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("Sequencia")
                         .HasColumnType("integer");
 

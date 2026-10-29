@@ -32,6 +32,10 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
     private const string SemChave =
         "Nenhuma chave de API configurada para a clinica. Peca ao administrador para cadastrar em Configuracoes.";
 
+    private const string ProtecaoIndisponivel =
+        "A protecao de dados (reconhecimento de nomes) esta fora do ar; nada foi enviado a IA. "
+        + "A fala continua sendo guardada - tente de novo em instantes.";
+
     /// <summary>Abaixo de qualquer sequencia que o navegador envia (que comeca em zero).</summary>
     private const int SequenciaLegada = -1;
 
@@ -222,10 +226,20 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
 
         var identidade = Identidade(atendimento);
 
-        // O texto guardado ja esta sanitizado; passar de novo e defesa em
-        // profundidade e e o que produz o tipo que o gerador exige.
+        // Nenhum texto vai a IA sem ter passado por todas as camadas da protecao.
+        try
+        {
+            await CompletarReconhecimentoAsync(transcricao, identidade, cancellationToken);
+        }
+        catch (ProtecaoIndisponivelException excecao)
+        {
+            _logger.LogWarning(excecao, "Rascunho do atendimento {AtendimentoId} adiado: protecao incompleta.", atendimentoId);
+            return ResultadoOperacao<RascunhoComOrigensDto>.Falha(ProtecaoIndisponivel);
+        }
+
         // Cada trecho vai numerado pela sua sequencia, para a IA citar de onde
-        // tirou cada campo.
+        // tirou cada campo. O texto guardado ja esta sanitizado; passar de novo
+        // e defesa em profundidade e o que produz o tipo que o gerador exige.
         var sanitizado = _sanitizador.Sanitizar(TextoNumerado(transcricao), identidade);
         var contexto = new ContextoGeracao(atendimento.TemplateNota?.Instrucoes, atendimento.Medico!.InstrucoesEstilo);
 
@@ -423,7 +437,7 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
 
         // Daqui em diante so existe o texto sanitizado: e ele que vai para o
         // banco, e o bruto morre no fim desta requisicao.
-        var sanitizado = _sanitizador.Sanitizar(textoBruto.Trim(), identidade);
+        var (sanitizado, reconhecido) = await SanitizarFalaAsync(textoBruto.Trim(), identidade, cancellationToken);
 
         var transcricao = GarantirTranscricao(atendimento);
 
@@ -446,12 +460,16 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
             // UPDATE. O proprio Add o coloca na colecao da transcricao.
             _db.TrechosTranscricao.Add(new TrechoTranscricao
             {
-                TranscricaoId = transcricao.Id, Sequencia = sequencia, Texto = sanitizado.Valor,
+                TranscricaoId = transcricao.Id,
+                Sequencia = sequencia,
+                Texto = sanitizado.Valor,
+                ReconhecimentoAplicado = reconhecido,
             });
         }
         else
         {
             existente.Texto = sanitizado.Valor;
+            existente.ReconhecimentoAplicado = reconhecido;
         }
 
         transcricao.Texto = TextoDosTrechos(transcricao);
@@ -461,6 +479,63 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
 
         return new TrechoRegistradoDto(
             sequencia, _sanitizador.Reidentificar(sanitizado.Valor, identidade), sanitizado.TotalSubstituicoes);
+    }
+
+    /// <summary>
+    /// Sanitiza a fala que acabou de chegar. Com o reconhecimento de nomes fora
+    /// do ar, a fala nao se perde: e guardada com as outras camadas e marcada
+    /// como pendente - o reconhecimento roda nela antes de qualquer envio a IA.
+    /// </summary>
+    private async Task<(TextoSanitizado Texto, bool Reconhecido)> SanitizarFalaAsync(
+        string texto, IdentidadeAtendimento identidade, CancellationToken cancellationToken)
+    {
+        if (!_sanitizador.ReconhecimentoHabilitado)
+        {
+            return (_sanitizador.Sanitizar(texto, identidade), false);
+        }
+
+        try
+        {
+            return (await _sanitizador.SanitizarAsync(texto, identidade, cancellationToken), true);
+        }
+        catch (ProtecaoIndisponivelException excecao)
+        {
+            _logger.LogWarning(excecao, "Reconhecimento de nomes indisponivel; trecho guardado como pendente.");
+            return (_sanitizador.Sanitizar(texto, identidade), false);
+        }
+    }
+
+    /// <summary>
+    /// Passa o reconhecimento de nomes nos trechos que ficaram pendentes. Lanca
+    /// <see cref="ProtecaoIndisponivelException"/> se ele continuar fora do ar.
+    /// </summary>
+    private async Task CompletarReconhecimentoAsync(
+        Transcricao transcricao, IdentidadeAtendimento identidade, CancellationToken cancellationToken)
+    {
+        if (!_sanitizador.ReconhecimentoHabilitado)
+        {
+            return;
+        }
+
+        // Transcricao do fluxo antigo, sem trechos: o texto inteiro passa por ele.
+        if (transcricao.Trechos.Count == 0)
+        {
+            transcricao.Texto = (await _sanitizador.SanitizarAsync(transcricao.Texto, identidade, cancellationToken)).Valor;
+            return;
+        }
+
+        var pendentes = transcricao.Trechos.Where(t => !t.ReconhecimentoAplicado).ToList();
+        foreach (var trecho in pendentes)
+        {
+            trecho.Texto = (await _sanitizador.SanitizarAsync(trecho.Texto, identidade, cancellationToken)).Valor;
+            trecho.ReconhecimentoAplicado = true;
+        }
+
+        if (pendentes.Count > 0)
+        {
+            transcricao.Texto = TextoDosTrechos(transcricao);
+            await _db.SaveChangesAsync(cancellationToken);
+        }
     }
 
     private static string TextoDosTrechos(Transcricao transcricao)
