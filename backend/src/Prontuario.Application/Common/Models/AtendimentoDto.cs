@@ -43,7 +43,11 @@ public sealed record AtendimentoDetalheDto(
     int? DuracaoTranscricaoSegundos,
     /// <summary>Quantos dados pessoais a sanitizacao retirou da transcricao.</summary>
     int DadosPessoaisProtegidos,
-    string? PacienteContato);
+    string? PacienteContato,
+    /// <summary>Trechos da transcricao, para exibicao, com a sequencia citada pelas origens.</summary>
+    IReadOnlyList<TrechoRegistradoDto> Trechos,
+    /// <summary>De quais trechos a IA tirou cada campo do rascunho.</summary>
+    IReadOnlyDictionary<string, IReadOnlyList<int>> OrigensIA);
 
 /// <summary>
 /// Numeros da clinica para a tela de atendimentos. O tempo economizado e uma

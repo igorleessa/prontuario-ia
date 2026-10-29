@@ -64,6 +64,14 @@ Aponte duas coisas enquanto a consulta acontece:
 Edite um campo no meio da consulta: o texto do médico não é sobrescrito, e a
 novidade da IA aparece como sugestão para aceitar ou não.
 
+Clique em **origem** ao lado de um campo: os trechos da conversa de onde a IA
+tirou aquele conteúdo ficam destacados. *"O médico não precisa confiar na IA —
+ele confere na própria fala."*
+
+Selecione com o mouse uma palavra da transcrição (o nome de um lugar, por exemplo)
+e clique em **Proteger**: ela some da transcrição e não chega mais à IA. *"Se a
+proteção automática deixar passar algo, o médico corrige na hora."*
+
 ### 5. A revisão (90 s) — o ponto alto
 
 Clique em **Encerrar consulta**. A tela já está na revisão, com o rascunho completo:

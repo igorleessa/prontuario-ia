@@ -51,8 +51,13 @@ public class TranscricaoController : ApiControllerBase
 
     /// <summary>Refaz o rascunho do prontuario sobre o que ja foi dito (preenchimento progressivo).</summary>
     [HttpPost("rascunho")]
-    public async Task<IActionResult> GerarRascunho(Guid id, CancellationToken cancellationToken)
-        => Responder(await _transcricao.GerarRascunhoAsync(id, ClinicaId, cancellationToken));
+    public async Task<IActionResult> GerarRascunho(Guid id, [FromQuery] bool final, CancellationToken cancellationToken)
+        => Responder(await _transcricao.GerarRascunhoAsync(id, ClinicaId, final, cancellationToken));
+
+    /// <summary>O medico marcou um trecho da transcricao como dado pessoal.</summary>
+    [HttpPost("termos-protegidos")]
+    public async Task<IActionResult> ProtegerTermo(Guid id, ProtegerTermoDto pedido, CancellationToken cancellationToken)
+        => Responder(await _transcricao.ProtegerTermoAsync(id, ClinicaId, pedido.Termo, cancellationToken));
 
     [HttpPost("encerrar")]
     public async Task<IActionResult> Encerrar(Guid id, EncerrarRequest request, CancellationToken cancellationToken)

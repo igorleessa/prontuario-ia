@@ -336,6 +336,57 @@
 }
 
 .trecho--pendente { color: var(--texto-tenue); }
+
+.trecho--origem {
+  border-color: var(--ia-borda);
+  background: var(--ia-suave);
+  box-shadow: inset 3px 0 0 var(--ia);
+}
+
+.protecao {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 1.25rem 0.75rem;
+  padding: 0.5rem 0.5rem 0.5rem 0.75rem;
+  border-radius: var(--raio);
+  background: var(--sucesso-suave);
+  color: var(--sucesso);
+  font-size: 0.8125rem;
+}
+
+.protecao--origem { background: var(--ia-suave); color: var(--ia); }
+
+.protecao__texto {
+  flex: 1;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  color: var(--texto);
+}
+
+.campo-clinico__origem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  order: 1;
+  margin-left: auto;
+  padding: 0.0625rem 0.5rem;
+  border: 1px solid var(--borda);
+  border-radius: 999px;
+  background: var(--superficie);
+  color: var(--texto-suave);
+  font: inherit;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.campo-clinico__origem:hover,
+.campo-clinico__origem--ativa { border-color: var(--ia-borda); background: var(--ia-suave); color: var(--ia); }
 .trecho--falhou { color: var(--alerta); background: var(--alerta-suave); border-color: transparent; }
 
 .trecho--andamento {

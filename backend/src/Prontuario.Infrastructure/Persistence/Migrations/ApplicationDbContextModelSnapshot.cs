@@ -57,6 +57,9 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("TemplateNotaId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("TermosProtegidosCifrados")
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
 
                     b.HasIndex("MedicoId");
@@ -140,6 +143,11 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("ModeloTexto")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ModeloTextoAoVivo")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -386,6 +394,9 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("HipoteseDiagnostica")
+                        .HasColumnType("text");
+
+                    b.Property<string>("OrigensJson")
                         .HasColumnType("text");
 
                     b.Property<string>("QueixaPrincipal")

@@ -27,6 +27,7 @@ export class ConfiguracaoIAComponent {
     chaveApi: [''],
     modeloTranscricao: ['gpt-4o-transcribe'],
     modeloTexto: ['gpt-4o'],
+    modeloTextoAoVivo: ['gpt-4o-mini'],
   });
 
   constructor() {
@@ -42,6 +43,7 @@ export class ConfiguracaoIAComponent {
         this.form.patchValue({
           modeloTranscricao: configuracao.modeloTranscricao,
           modeloTexto: configuracao.modeloTexto,
+          modeloTextoAoVivo: configuracao.modeloTextoAoVivo,
         });
         this.carregando.set(false);
       },
@@ -73,6 +75,7 @@ export class ConfiguracaoIAComponent {
         chaveApi: valores.chaveApi.trim() || null,
         modeloTranscricao: valores.modeloTranscricao,
         modeloTexto: valores.modeloTexto,
+        modeloTextoAoVivo: valores.modeloTextoAoVivo,
       })
       .subscribe({
         next: (configuracao) => {
@@ -104,8 +107,14 @@ export class ConfiguracaoIAComponent {
           modeloTranscricao: 'gpt-4o-transcribe',
           modeloTexto: 'gpt-4o',
           atualizadoEm: null,
+          modeloTextoAoVivo: 'gpt-4o-mini',
         });
-        this.form.reset({ chaveApi: '', modeloTranscricao: 'gpt-4o-transcribe', modeloTexto: 'gpt-4o' });
+        this.form.reset({
+          chaveApi: '',
+          modeloTranscricao: 'gpt-4o-transcribe',
+          modeloTexto: 'gpt-4o',
+          modeloTextoAoVivo: 'gpt-4o-mini',
+        });
         this.sucesso.set('Chave removida.');
       },
       error: () => this.erro.set('Não foi possível remover a chave.'),

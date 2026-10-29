@@ -33,6 +33,7 @@ public static class AcoesAuditoria
     public const string TranscricaoIniciada = "transcricao.iniciada";
     public const string TranscricaoEncerrada = "transcricao.encerrada";
     public const string RascunhoGerado = "rascunho.gerado";
+    public const string TermoProtegido = "privacidade.termo-protegido";
     public const string RegistroConfirmado = "registro.confirmado";
     public const string AtendimentoCancelado = "atendimento.cancelado";
     public const string NotaExportada = "nota.exportada";

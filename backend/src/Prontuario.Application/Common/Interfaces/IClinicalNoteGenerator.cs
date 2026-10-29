@@ -12,7 +12,11 @@ namespace Prontuario.Application.Common.Interfaces;
 /// </summary>
 public interface IClinicalNoteGenerator
 {
-    Task<RascunhoClinicoDto> GerarRascunhoAsync(
+    /// <summary>
+    /// A transcricao chega com cada trecho numerado ("[12] ..."); as origens
+    /// devolvidas citam esses numeros.
+    /// </summary>
+    Task<RascunhoComOrigensDto> GerarRascunhoAsync(
         TextoSanitizado transcricao,
         CredenciaisIA credenciais,
         ContextoGeracao contexto,

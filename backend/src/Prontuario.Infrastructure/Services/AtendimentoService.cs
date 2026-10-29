@@ -119,7 +119,43 @@ public class AtendimentoService : IAtendimentoService
             atendimento.TemplateNota?.Nome,
             atendimento.SessaoTranscricao?.DuracaoSegundos,
             transcricao is null ? 0 : IdentidadeDoAtendimento.ContarMarcadores(transcricao),
-            atendimento.PacienteRef.Contato);
+            atendimento.PacienteRef.Contato,
+            await ObterTrechosAsync(atendimento.Id, identidade, cancellationToken),
+            await ObterOrigensIAAsync(atendimento.Id, cancellationToken));
+    }
+
+    /// <summary>Trechos com a sequencia real, que e o que as origens da IA citam.</summary>
+    private async Task<IReadOnlyList<TrechoRegistradoDto>> ObterTrechosAsync(
+        Guid atendimentoId, Application.Privacidade.IdentidadeAtendimento identidade, CancellationToken cancellationToken)
+    {
+        var trechos = await _db.TrechosTranscricao
+            .Where(t => t.Transcricao!.SessaoTranscricao!.AtendimentoId == atendimentoId)
+            .OrderBy(t => t.Sequencia)
+            .Select(t => new { t.Sequencia, t.Texto })
+            .ToListAsync(cancellationToken);
+
+        return trechos
+            .Where(t => t.Texto.Length > 0)
+            .Select(t => new TrechoRegistradoDto(
+                t.Sequencia,
+                _sanitizador.Reidentificar(t.Texto, identidade),
+                IdentidadeDoAtendimento.ContarMarcadores(t.Texto)))
+            .ToList();
+    }
+
+    private async Task<IReadOnlyDictionary<string, IReadOnlyList<int>>> ObterOrigensIAAsync(
+        Guid atendimentoId, CancellationToken cancellationToken)
+    {
+        var json = await _db.RascunhosIA
+            .Where(r => r.Transcricao!.SessaoTranscricao!.AtendimentoId == atendimentoId)
+            .OrderByDescending(r => r.CriadoEm)
+            .Select(r => r.OrigensJson)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return string.IsNullOrEmpty(json)
+            ? RascunhoComOrigensDto.SemOrigens
+            : System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, IReadOnlyList<int>>>(json)
+                ?? RascunhoComOrigensDto.SemOrigens;
     }
 
     public async Task<bool> RegistrarConsentimentoAsync(Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default)

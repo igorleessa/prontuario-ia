@@ -10,9 +10,11 @@ public sealed record ConfiguracaoIADto(
     string? ChaveApiSufixo,
     string ModeloTranscricao,
     string ModeloTexto,
-    DateTime? AtualizadoEm);
+    DateTime? AtualizadoEm,
+    string ModeloTextoAoVivo);
 
 public sealed record SalvarConfiguracaoIADto(
     string? ChaveApi,
     string ModeloTranscricao,
-    string ModeloTexto);
+    string ModeloTexto,
+    string? ModeloTextoAoVivo = null);

@@ -46,6 +46,7 @@ public static class DependencyInjection
 
         // Toda saida para o provedor de IA passa pela sanitizacao local.
         services.AddSingleton<ISanitizadorDados, SanitizadorDados>();
+        services.AddSingleton<CofreTermosProtegidos>();
 
         services.Configure<TranscricaoOptions>(configuration.GetSection(TranscricaoOptions.SectionName));
         services.AddScoped<ITranscriptionService, OpenAiTranscriptionService>();

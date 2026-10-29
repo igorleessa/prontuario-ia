@@ -9,6 +9,15 @@ export interface RascunhoClinico {
   conduta: string | null;
 }
 
+/** Sequências dos trechos da transcrição que sustentam cada campo, por nome do campo. */
+export type OrigensRascunho = Partial<Record<keyof RascunhoClinico, number[]>>;
+
+/** Espelha RascunhoComOrigensDto: o rascunho e de onde a IA tirou cada campo. */
+export interface RascunhoComOrigens {
+  rascunho: RascunhoClinico;
+  origens: OrigensRascunho;
+}
+
 export const RASCUNHO_VAZIO: RascunhoClinico = {
   queixaPrincipal: null,
   hda: null,

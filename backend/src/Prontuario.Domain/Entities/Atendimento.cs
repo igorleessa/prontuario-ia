@@ -25,6 +25,12 @@ public class Atendimento : BaseEntity
     /// <summary>Motivo da falha do pipeline de IA, mostrado ao medico para que ele saiba por que precisa preencher manualmente.</summary>
     public string? ErroProcessamentoIA { get; set; }
 
+    /// <summary>
+    /// Trechos que o medico marcou como dado pessoal na transcricao, cifrados
+    /// (Data Protection): sao dados pessoais e nao ficam em claro no banco.
+    /// </summary>
+    public string? TermosProtegidosCifrados { get; set; }
+
     public SessaoTranscricao? SessaoTranscricao { get; set; }
     public ProntuarioRegistro? Prontuario { get; set; }
     public NotaExportavel? NotaExportavel { get; set; }

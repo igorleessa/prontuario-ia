@@ -30,8 +30,20 @@ public interface ITranscricaoConsultaService
     /// durante a consulta (preenchimento progressivo), ao encerrar e para tentar
     /// de novo quando a IA falhou.
     /// </summary>
-    Task<ResultadoOperacao<RascunhoClinicoDto>> GerarRascunhoAsync(
-        Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default);
+    /// <param name="final">
+    /// Passada final (encerramento, "refazer rascunho"): usa o modelo completo.
+    /// Durante a consulta, o modelo rapido.
+    /// </param>
+    Task<ResultadoOperacao<RascunhoComOrigensDto>> GerarRascunhoAsync(
+        Guid atendimentoId, Guid clinicaId, bool final = false, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// O medico marcou um trecho como dado pessoal que a sanitizacao deixou
+    /// passar: o termo passa a valer para o atendimento inteiro, e a transcricao
+    /// ja guardada e sanitizada de novo. Conflito quando o trecho nao aparece nela.
+    /// </summary>
+    Task<ResultadoOperacao<TranscricaoAtualizadaDto>> ProtegerTermoAsync(
+        Guid atendimentoId, Guid clinicaId, string termo, CancellationToken cancellationToken = default);
 
     /// <summary>Fecha a escuta e leva o atendimento a revisao do medico.</summary>
     Task<ResultadoAtendimento> EncerrarAsync(

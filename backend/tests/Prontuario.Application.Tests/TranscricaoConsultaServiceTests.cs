@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -70,7 +71,8 @@ public class TranscricaoConsultaServiceTests : IDisposable
             _llm,
             Substitute.For<IAuditoriaService>(),
             Options.Create(new TranscricaoOptions()),
-            NullLogger<TranscricaoConsultaService>.Instance);
+            NullLogger<TranscricaoConsultaService>.Instance,
+            new CofreTermosProtegidos(new EphemeralDataProtectionProvider()));
     }
 
     [Fact]
@@ -162,7 +164,7 @@ public class TranscricaoConsultaServiceTests : IDisposable
         _llm.GerarRascunhoAsync(
                 Arg.Do<TextoSanitizado>(texto => enviado = texto),
                 Arg.Any<CredenciaisIA>(), Arg.Any<ContextoGeracao>(), Arg.Any<CancellationToken>())
-            .Returns(new RascunhoClinicoDto("[PACIENTE] com tosse há 4 dias.", null, null, null, null, "J06.9", null));
+            .Returns(ComOrigens(new RascunhoClinicoDto("[PACIENTE] com tosse há 4 dias.", null, null, null, null, "J06.9", null)));
 
         var resultado = await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
 
@@ -173,8 +175,57 @@ public class TranscricaoConsultaServiceTests : IDisposable
         Assert.Contains("tosse há 4 dias", enviado.Valor);
 
         // O marcador volta com o nome do cadastro para a tela do medico.
-        Assert.Equal("Helena Souza com tosse há 4 dias.", resultado.Valor!.QueixaPrincipal);
+        Assert.Equal("Helena Souza com tosse há 4 dias.", resultado.Valor!.Rascunho.QueixaPrincipal);
         Assert.Equal("Helena Souza com tosse há 4 dias.", _db.RascunhosIA.Single().QueixaPrincipal);
+    }
+
+    [Fact]
+    public async Task Rascunho_NumeraOsTrechosEGuardaSoAsOrigensQueExistem()
+    {
+        await Registrar(0, "Estou com tosse.");
+        await Registrar(1, "Faz quatro dias.");
+
+        TextoSanitizado? enviado = null;
+        _llm.GerarRascunhoAsync(
+                Arg.Do<TextoSanitizado>(texto => enviado = texto),
+                Arg.Any<CredenciaisIA>(), Arg.Any<ContextoGeracao>(), Arg.Any<CancellationToken>())
+            .Returns(ComOrigens(
+                new RascunhoClinicoDto("Tosse há 4 dias.", null, null, null, null, null, null),
+                new Dictionary<string, IReadOnlyList<int>>
+                {
+                    ["queixaPrincipal"] = [0, 1, 7],
+                    ["hda"] = [1],
+                }));
+
+        var resultado = await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+
+        Assert.Equal("[0] Estou com tosse.\n[1] Faz quatro dias.", enviado!.Valor);
+
+        // Trecho 7 nao existe; HDA veio vazia. Citacao sem respaldo nao vira evidencia.
+        var origens = resultado.Valor!.Origens;
+        Assert.Equal([0, 1], origens["queixaPrincipal"]);
+        Assert.False(origens.ContainsKey("hda"));
+        Assert.Contains("queixaPrincipal", _db.RascunhosIA.Single().OrigensJson);
+    }
+
+    [Theory]
+    [InlineData(false, "gpt-4o-mini")]
+    [InlineData(true, "gpt-4o")]
+    public async Task Rascunho_UsaOModeloRapidoNaConsultaEOCompletoNaPassadaFinal(bool final, string esperado)
+    {
+        _configuracoes.ObterCredenciaisAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(new CredenciaisIA("sk-teste", "gpt-4o-transcribe", "gpt-4o", "gpt-4o-mini"));
+        await Registrar(0, "Tosse.");
+
+        CredenciaisIA? usadas = null;
+        _llm.GerarRascunhoAsync(
+                Arg.Any<TextoSanitizado>(), Arg.Do<CredenciaisIA>(c => usadas = c),
+                Arg.Any<ContextoGeracao>(), Arg.Any<CancellationToken>())
+            .Returns(ComOrigens(new RascunhoClinicoDto("Tosse.", null, null, null, null, null, null)));
+
+        await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id, final);
+
+        Assert.Equal(esperado, usadas!.ModeloTexto);
     }
 
     [Fact]
@@ -226,6 +277,35 @@ public class TranscricaoConsultaServiceTests : IDisposable
 
         Assert.Equal(ResultadoAtendimento.Conflito, trecho.Resultado);
         Assert.Equal(ResultadoAtendimento.Conflito, rascunho.Resultado);
+    }
+
+    [Fact]
+    public async Task TermoMarcadoPeloMedico_SomeDaTranscricaoEDasProximasFalas()
+    {
+        await Registrar(0, "O neto estuda na escola Pequeno Príncipe.");
+
+        var resultado = await _servico.ProtegerTermoAsync(_atendimento.Id, _clinica.Id, "Pequeno Príncipe");
+        await Registrar(1, "A pequeno príncipe fica perto de casa.");
+
+        Assert.Equal(ResultadoAtendimento.Ok, resultado.Resultado);
+        Assert.Equal("O neto estuda na escola [DADO_PESSOAL].\nA [DADO_PESSOAL] fica perto de casa.", _db.Transcricoes.Single().Texto);
+        Assert.Equal("O neto estuda na escola [DADO_PESSOAL].", resultado.Valor!.Trechos.Single().Texto);
+
+        // O termo e o proprio dado pessoal: nao fica em claro no banco.
+        var cifrado = _db.Atendimentos.Single().TermosProtegidosCifrados;
+        Assert.NotNull(cifrado);
+        Assert.DoesNotContain("Príncipe", cifrado);
+    }
+
+    [Fact]
+    public async Task TermoQueNaoEstaNaTranscricao_NaoEhGuardado()
+    {
+        await Registrar(0, "Tosse há 4 dias.");
+
+        var resultado = await _servico.ProtegerTermoAsync(_atendimento.Id, _clinica.Id, "Pequeno Príncipe");
+
+        Assert.Equal(ResultadoAtendimento.Conflito, resultado.Resultado);
+        Assert.Null(_db.Atendimentos.Single().TermosProtegidosCifrados);
     }
 
     [Fact]
@@ -311,7 +391,11 @@ public class TranscricaoConsultaServiceTests : IDisposable
     private void RetornarQueixa(string queixa)
         => _llm.GerarRascunhoAsync(
                 Arg.Any<TextoSanitizado>(), Arg.Any<CredenciaisIA>(), Arg.Any<ContextoGeracao>(), Arg.Any<CancellationToken>())
-            .Returns(new RascunhoClinicoDto(queixa, null, null, null, null, null, null));
+            .Returns(ComOrigens(new RascunhoClinicoDto(queixa, null, null, null, null, null, null)));
+
+    private static RascunhoComOrigensDto ComOrigens(
+        RascunhoClinicoDto rascunho, Dictionary<string, IReadOnlyList<int>>? origens = null)
+        => new(rascunho, origens ?? new Dictionary<string, IReadOnlyList<int>>());
 
     public void Dispose() => _db.Dispose();
 }

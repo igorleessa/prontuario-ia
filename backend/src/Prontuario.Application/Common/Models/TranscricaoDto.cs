@@ -40,6 +40,12 @@ public sealed record RegistrarTrechoDto(int Sequencia, string Texto);
 /// </summary>
 public sealed record TrechoRegistradoDto(int Sequencia, string Texto, int DadosProtegidos);
 
+/// <summary>O medico marcou um trecho da transcricao como dado pessoal.</summary>
+public sealed record ProtegerTermoDto(string Termo);
+
+/// <summary>Trechos depois de sanitizados de novo, como o medico os ve.</summary>
+public sealed record TranscricaoAtualizadaDto(IReadOnlyList<TrechoRegistradoDto> Trechos, int DadosProtegidos);
+
 /// <summary>Credencial temporaria emitida pelo provedor de transcricao em tempo real.</summary>
 public sealed record CredencialTempoReal(string Chave, DateTime ExpiraEm, string UrlConexao);
 

@@ -19,4 +19,9 @@ public interface IConfiguracaoIAService
     Task<CredenciaisIA?> ObterCredenciaisAsync(Guid clinicaId, CancellationToken cancellationToken = default);
 }
 
-public sealed record CredenciaisIA(string ChaveApi, string ModeloTranscricao, string ModeloTexto);
+/// <summary>
+/// <paramref name="ModeloTextoAoVivo"/> refaz o rascunho durante a consulta, muitas
+/// vezes e com pressa; <paramref name="ModeloTexto"/> faz a passada final.
+/// </summary>
+public sealed record CredenciaisIA(
+    string ChaveApi, string ModeloTranscricao, string ModeloTexto, string? ModeloTextoAoVivo = null);

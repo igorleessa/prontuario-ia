@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -43,6 +44,7 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
     private readonly IAuditoriaService _auditoria;
     private readonly TranscricaoOptions _opcoes;
     private readonly ILogger<TranscricaoConsultaService> _logger;
+    private readonly CofreTermosProtegidos _termos;
 
     public TranscricaoConsultaService(
         ApplicationDbContext db,
@@ -53,7 +55,8 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
         IClinicalNoteGenerator llm,
         IAuditoriaService auditoria,
         IOptions<TranscricaoOptions> opcoes,
-        ILogger<TranscricaoConsultaService> logger)
+        ILogger<TranscricaoConsultaService> logger,
+        CofreTermosProtegidos termos)
     {
         _db = db;
         _sanitizador = sanitizador;
@@ -64,6 +67,7 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
         _auditoria = auditoria;
         _opcoes = opcoes.Value;
         _logger = logger;
+        _termos = termos;
     }
 
     public async Task<ResultadoOperacao<SessaoTranscricaoDto>> IniciarAsync(
@@ -189,44 +193,51 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
             await GuardarAsync(atendimento, sequencia, texto, cancellationToken));
     }
 
-    public async Task<ResultadoOperacao<RascunhoClinicoDto>> GerarRascunhoAsync(
-        Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default)
+    public async Task<ResultadoOperacao<RascunhoComOrigensDto>> GerarRascunhoAsync(
+        Guid atendimentoId, Guid clinicaId, bool final = false, CancellationToken cancellationToken = default)
     {
         var atendimento = await CarregarAsync(atendimentoId, clinicaId, cancellationToken);
         if (atendimento is null)
         {
-            return ResultadoOperacao<RascunhoClinicoDto>.NaoEncontrado();
+            return ResultadoOperacao<RascunhoComOrigensDto>.NaoEncontrado();
         }
 
         // A IA nao mexe no que ja foi assinado ou exportado.
         if (Bloqueio(atendimento) is { } motivo)
         {
-            return ResultadoOperacao<RascunhoClinicoDto>.Conflito(motivo);
+            return ResultadoOperacao<RascunhoComOrigensDto>.Conflito(motivo);
         }
 
         var transcricao = atendimento.SessaoTranscricao?.Transcricao;
         if (transcricao is null || string.IsNullOrWhiteSpace(transcricao.Texto))
         {
-            return ResultadoOperacao<RascunhoClinicoDto>.Conflito("Ainda nao ha fala transcrita nesta consulta.");
+            return ResultadoOperacao<RascunhoComOrigensDto>.Conflito("Ainda nao ha fala transcrita nesta consulta.");
         }
 
         var credenciais = await _configuracoes.ObterCredenciaisAsync(clinicaId, cancellationToken);
         if (credenciais is null)
         {
-            return ResultadoOperacao<RascunhoClinicoDto>.Conflito(SemChave);
+            return ResultadoOperacao<RascunhoComOrigensDto>.Conflito(SemChave);
         }
 
-        var identidade = IdentidadeDoAtendimento.De(atendimento.PacienteRef!, atendimento.Medico!);
+        var identidade = Identidade(atendimento);
 
         // O texto guardado ja esta sanitizado; passar de novo e defesa em
         // profundidade e e o que produz o tipo que o gerador exige.
-        var sanitizado = _sanitizador.Sanitizar(transcricao.Texto, identidade);
+        // Cada trecho vai numerado pela sua sequencia, para a IA citar de onde
+        // tirou cada campo.
+        var sanitizado = _sanitizador.Sanitizar(TextoNumerado(transcricao), identidade);
         var contexto = new ContextoGeracao(atendimento.TemplateNota?.Instrucoes, atendimento.Medico!.InstrucoesEstilo);
 
-        RascunhoClinicoDto sugestao;
+        // Durante a consulta o rascunho e refeito muitas vezes, com o medico
+        // esperando: modelo rapido. A passada final usa o modelo completo.
+        var modelo = final ? credenciais.ModeloTexto : credenciais.ModeloTextoAoVivo ?? credenciais.ModeloTexto;
+
+        RascunhoComOrigensDto gerado;
         try
         {
-            sugestao = await _llm.GerarRascunhoAsync(sanitizado, credenciais, contexto, cancellationToken);
+            gerado = await _llm.GerarRascunhoAsync(
+                sanitizado, credenciais with { ModeloTexto = modelo }, contexto, cancellationToken);
         }
         catch (Exception excecao) when (excecao is HttpRequestException or InvalidOperationException or TaskCanceledException or System.Text.Json.JsonException)
         {
@@ -234,11 +245,12 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
             atendimento.ErroProcessamentoIA = excecao.Message.Length > 500 ? excecao.Message[..500] : excecao.Message;
             transcricao.Status = StatusProcessamento.Falhou;
             await _db.SaveChangesAsync(cancellationToken);
-            return ResultadoOperacao<RascunhoClinicoDto>.Falha(atendimento.ErroProcessamentoIA);
+            return ResultadoOperacao<RascunhoComOrigensDto>.Falha(atendimento.ErroProcessamentoIA);
         }
 
-        VerificarSaida(sugestao, identidade, atendimentoId);
-        var rascunho = Reidentificar(sugestao, identidade);
+        VerificarSaida(gerado.Rascunho, identidade, atendimentoId);
+        var rascunho = Reidentificar(gerado.Rascunho, identidade);
+        var origens = FiltrarOrigens(gerado.Origens, rascunho, transcricao);
 
         var registro = await _db.RascunhosIA
             .SingleOrDefaultAsync(r => r.TranscricaoId == transcricao.Id, cancellationToken);
@@ -256,6 +268,7 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
         registro.HipoteseDiagnostica = rascunho.HipoteseDiagnostica;
         registro.Cid10Sugerido = rascunho.Cid10Sugerido;
         registro.Conduta = rascunho.Conduta;
+        registro.OrigensJson = JsonSerializer.Serialize(origens);
 
         transcricao.Status = StatusProcessamento.Concluido;
         atendimento.ErroProcessamentoIA = null;
@@ -265,7 +278,113 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
             AcoesAuditoria.RascunhoGerado, atendimentoId, $"{sanitizado.TotalSubstituicoes} dados protegidos",
             cancellationToken);
 
-        return ResultadoOperacao<RascunhoClinicoDto>.Ok(rascunho);
+        return ResultadoOperacao<RascunhoComOrigensDto>.Ok(new RascunhoComOrigensDto(rascunho, origens));
+    }
+
+    private static string TextoNumerado(Transcricao transcricao)
+        => transcricao.Trechos.Count == 0
+            ? transcricao.Texto
+            : string.Join(
+                "\n",
+                transcricao.Trechos.OrderBy(t => t.Sequencia).Where(t => t.Texto.Length > 0)
+                    .Select(t => $"[{t.Sequencia}] {t.Texto}"));
+
+    /// <summary>
+    /// So ficam origens que apontam para trechos que existem e para campos que
+    /// a IA de fato preencheu: uma citacao inventada nao pode virar evidencia.
+    /// </summary>
+    private static Dictionary<string, IReadOnlyList<int>> FiltrarOrigens(
+        IReadOnlyDictionary<string, IReadOnlyList<int>> origens, RascunhoClinicoDto rascunho, Transcricao transcricao)
+    {
+        var existentes = transcricao.Trechos.Select(t => t.Sequencia).ToHashSet();
+        var preenchidos = new Dictionary<string, string?>
+        {
+            ["queixaPrincipal"] = rascunho.QueixaPrincipal,
+            ["hda"] = rascunho.Hda,
+            ["antecedentes"] = rascunho.Antecedentes,
+            ["exameFisico"] = rascunho.ExameFisico,
+            ["hipoteseDiagnostica"] = rascunho.HipoteseDiagnostica,
+            ["cid10Sugerido"] = rascunho.Cid10Sugerido,
+            ["conduta"] = rascunho.Conduta,
+        };
+
+        return origens
+            .Where(par => preenchidos.TryGetValue(par.Key, out var valor) && !string.IsNullOrWhiteSpace(valor))
+            .Select(par => (par.Key, Sequencias: (IReadOnlyList<int>)par.Value.Where(existentes.Contains).ToList()))
+            .Where(par => par.Sequencias.Count > 0)
+            .ToDictionary(par => par.Key, par => par.Sequencias);
+    }
+
+    public async Task<ResultadoOperacao<TranscricaoAtualizadaDto>> ProtegerTermoAsync(
+        Guid atendimentoId, Guid clinicaId, string termo, CancellationToken cancellationToken = default)
+    {
+        termo = termo.Trim();
+        if (termo.Length is < 2 or > 120)
+        {
+            return ResultadoOperacao<TranscricaoAtualizadaDto>.Conflito("Selecione de 2 a 120 caracteres.");
+        }
+
+        var atendimento = await CarregarAsync(atendimentoId, clinicaId, cancellationToken);
+        if (atendimento is null)
+        {
+            return ResultadoOperacao<TranscricaoAtualizadaDto>.NaoEncontrado();
+        }
+
+        var transcricao = atendimento.SessaoTranscricao?.Transcricao;
+        if (transcricao is null)
+        {
+            return ResultadoOperacao<TranscricaoAtualizadaDto>.Conflito("Esta consulta não tem transcrição.");
+        }
+
+        // So o termo novo e aplicado a cada trecho: o texto ja guardado esta
+        // sanitizado, e passar de novo pelas outras camadas nao o muda.
+        var soOTermo = Identidade(atendimento) with { TermosProtegidos = [termo] };
+        var trocados = 0;
+
+        foreach (var trecho in transcricao.Trechos)
+        {
+            var sanitizado = _sanitizador.Sanitizar(trecho.Texto, soOTermo);
+            trocados += sanitizado.Substituicoes.GetValueOrDefault("DADO_PESSOAL");
+            trecho.Texto = sanitizado.Valor;
+        }
+
+        if (transcricao.Trechos.Count == 0)
+        {
+            var sanitizado = _sanitizador.Sanitizar(transcricao.Texto, soOTermo);
+            trocados += sanitizado.Substituicoes.GetValueOrDefault("DADO_PESSOAL");
+            transcricao.Texto = sanitizado.Valor;
+        }
+        else
+        {
+            transcricao.Texto = TextoDosTrechos(transcricao);
+        }
+
+        if (trocados == 0)
+        {
+            return ResultadoOperacao<TranscricaoAtualizadaDto>.Conflito(
+                "O trecho selecionado não foi encontrado na transcrição.");
+        }
+
+        // O termo vale tambem para as falas que ainda vao chegar e para os
+        // documentos redigidos depois.
+        _termos.Adicionar(atendimento, termo);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        await _auditoria.RegistrarAsync(
+            AcoesAuditoria.TermoProtegido, atendimentoId, $"{trocados} ocorrencias", cancellationToken);
+
+        var identidade = Identidade(atendimento);
+        var trechos = transcricao.Trechos
+            .OrderBy(t => t.Sequencia)
+            .Where(t => t.Texto.Length > 0)
+            .Select(t => new TrechoRegistradoDto(
+                t.Sequencia,
+                _sanitizador.Reidentificar(t.Texto, identidade),
+                IdentidadeDoAtendimento.ContarMarcadores(t.Texto)))
+            .ToList();
+
+        return ResultadoOperacao<TranscricaoAtualizadaDto>.Ok(new TranscricaoAtualizadaDto(
+            trechos, IdentidadeDoAtendimento.ContarMarcadores(transcricao.Texto)));
     }
 
     public async Task<ResultadoAtendimento> EncerrarAsync(
@@ -300,7 +419,7 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
     private async Task<TrechoRegistradoDto> GuardarAsync(
         Atendimento atendimento, int sequencia, string textoBruto, CancellationToken cancellationToken)
     {
-        var identidade = IdentidadeDoAtendimento.De(atendimento.PacienteRef!, atendimento.Medico!);
+        var identidade = Identidade(atendimento);
 
         // Daqui em diante so existe o texto sanitizado: e ele que vai para o
         // banco, e o bruto morre no fim desta requisicao.
@@ -335,9 +454,7 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
             existente.Texto = sanitizado.Valor;
         }
 
-        transcricao.Texto = string.Join(
-            "\n",
-            transcricao.Trechos.OrderBy(t => t.Sequencia).Select(t => t.Texto).Where(t => t.Length > 0));
+        transcricao.Texto = TextoDosTrechos(transcricao);
         transcricao.Status = StatusProcessamento.Processando;
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -345,6 +462,14 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
         return new TrechoRegistradoDto(
             sequencia, _sanitizador.Reidentificar(sanitizado.Valor, identidade), sanitizado.TotalSubstituicoes);
     }
+
+    private static string TextoDosTrechos(Transcricao transcricao)
+        => string.Join(
+            "\n",
+            transcricao.Trechos.OrderBy(t => t.Sequencia).Select(t => t.Texto).Where(t => t.Length > 0));
+
+    private IdentidadeAtendimento Identidade(Atendimento atendimento)
+        => IdentidadeDoAtendimento.De(atendimento.PacienteRef!, atendimento.Medico!, _termos.Ler(atendimento));
 
     private Transcricao GarantirTranscricao(Atendimento atendimento)
     {

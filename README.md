@@ -30,6 +30,11 @@ dos campos → revisão) atende dois modelos de negócio, escolhidos por configu
 - **Prontuário preenchido durante a consulta**: o rascunho é refeito conforme a
   fala chega, e os campos se preenchem na tela. O que o médico edita nunca é
   sobrescrito — a novidade da IA aparece como sugestão para aceitar ou não.
+- **Origem de cada campo**: a IA indica de quais falas tirou o conteúdo, e o
+  médico vê esses trechos destacados na transcrição com um clique. Citação para
+  trecho que não existe é descartada.
+- **Dois modelos**: um rápido e barato refaz o rascunho durante a consulta
+  (padrão `gpt-4o-mini`); o completo faz a passada final ao encerrar.
 - Tela de revisão campo a campo, com etiqueta no que veio da IA e no que o médico
   alterou, e comparação com a sugestão original.
 - Modelos de nota por especialidade (clínica geral, cardiologia, pediatria,
@@ -45,7 +50,15 @@ dos campos → revisão) atende dois modelos de negócio, escolhidos por configu
 - Três camadas de detecção: dicionário do atendimento (nome, CPF, nascimento e
   contato do paciente, vindos do cadastro, tolerante a variações de grafia),
   padrões com validação (CPF e CNS com dígito verificador, telefone, e-mail, CEP,
-  endereço, números longos) e contexto de fala ("minha filha Mariana", "seu João").
+  endereço, números longos) e nomes de terceiros — por contexto de fala ("minha
+  filha Mariana", "seu João") e por um léxico local de prenomes e sobrenomes
+  brasileiros ("a Mariana Costa trouxe os exames").
+- **Correção pelo médico**: selecionar um trecho da transcrição e marcar como dado
+  pessoal. Ele some da transcrição já guardada, vale para as próximas falas e
+  para os documentos, e fica cifrado no banco (é o próprio dado pessoal).
+- Base de teste de privacidade (`CorpusPrivacidadeTests`): consultas fictícias com
+  o que não pode vazar e o que não pode sumir. Vazamento encontrado em uso vira
+  uma linha nela.
 - Lista de proteção médica: epônimos (Parkinson, Murphy, Chagas…) e números
   clínicos (doses, sinais vitais, "1.200.000 UI") não são apagados.
 - Os serviços de IA só aceitam o tipo `TextoSanitizado`, que só o sanitizador cria:
@@ -73,7 +86,7 @@ dos campos → revisão) atende dois modelos de negócio, escolhidos por configu
 - Nenhum áudio é armazenado em lugar algum: não há storage de arquivos.
 
 **Ainda não implementado**: assinatura digital ICP-Brasil, identificação de quem
-fala na transcrição, reconhecimento de nomes por modelo local (Presidio/NER),
+fala na transcrição, reconhecimento de nomes por modelo estatístico local (NER),
 agenda, faturamento e TISS.
 
 ## Stack

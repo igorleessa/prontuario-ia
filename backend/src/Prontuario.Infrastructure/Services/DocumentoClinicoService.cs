@@ -15,6 +15,7 @@ public class DocumentoClinicoService : IDocumentoClinicoService
     private readonly IUsuarioAtual _usuario;
     private readonly IAuditoriaService _auditoria;
     private readonly ISanitizadorDados _sanitizador;
+    private readonly CofreTermosProtegidos _termos;
 
     public DocumentoClinicoService(
         ApplicationDbContext db,
@@ -22,7 +23,8 @@ public class DocumentoClinicoService : IDocumentoClinicoService
         IConfiguracaoIAService configuracoes,
         IUsuarioAtual usuario,
         IAuditoriaService auditoria,
-        ISanitizadorDados sanitizador)
+        ISanitizadorDados sanitizador,
+        CofreTermosProtegidos termos)
     {
         _db = db;
         _llm = llm;
@@ -30,6 +32,7 @@ public class DocumentoClinicoService : IDocumentoClinicoService
         _usuario = usuario;
         _auditoria = auditoria;
         _sanitizador = sanitizador;
+        _termos = termos;
     }
 
     public async Task<IReadOnlyList<DocumentoClinicoDto>> ListarAsync(
@@ -78,7 +81,8 @@ public class DocumentoClinicoService : IDocumentoClinicoService
         // Transcricao e registro passam pela sanitizacao antes de ir ao provedor:
         // o medico pode ter digitado nomes no registro revisado. O nome do
         // paciente volta no fim, a partir do cadastro, no lugar do marcador.
-        var identidade = IdentidadeDoAtendimento.De(atendimento.PacienteRef!, atendimento.Medico!);
+        var identidade = IdentidadeDoAtendimento.De(
+            atendimento.PacienteRef!, atendimento.Medico!, _termos.Ler(atendimento));
         var redigido = await _llm.GerarDocumentoAsync(
             tipoDocumento.ToString(),
             _sanitizador.Sanitizar(transcricao, identidade),

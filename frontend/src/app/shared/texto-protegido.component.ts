@@ -15,6 +15,7 @@ const ROTULO_MARCADOR: Record<string, string> = {
   CPF_PACIENTE: 'CPF',
   CONTATO_PACIENTE: 'contato',
   DATA_NASCIMENTO: 'nascimento',
+  DADO_PESSOAL: 'dado pessoal',
 };
 
 interface Pedaco {

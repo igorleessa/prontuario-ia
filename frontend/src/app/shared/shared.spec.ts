@@ -36,6 +36,14 @@ describe('TextoProtegidoComponent', () => {
     expect(elemento.textContent).toBe('Ligue para a filha nome protegido no telefone protegido.');
   });
 
+  it('mostra como protegido o trecho que o medico marcou', () => {
+    const fixture = TestBed.createComponent(TextoProtegidoComponent);
+    fixture.componentRef.setInput('texto', 'Padaria [DADO_PESSOAL].');
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement as HTMLElement).textContent).toBe('Padaria dado pessoal protegido.');
+  });
+
   it('mantem colchetes que nao sao marcadores', () => {
     const fixture = TestBed.createComponent(TextoProtegidoComponent);
     fixture.componentRef.setInput('texto', 'Dose [ver bula]');

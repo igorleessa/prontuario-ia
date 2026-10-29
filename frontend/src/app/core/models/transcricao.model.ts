@@ -18,6 +18,12 @@ export interface SessaoTranscricao {
  */
 export type ModoTranscricao = 'TempoReal' | 'Trechos';
 
+/** Espelha TranscricaoAtualizadaDto: trechos depois de o médico proteger um termo. */
+export interface TranscricaoAtualizada {
+  trechos: TrechoRegistrado[];
+  dadosProtegidos: number;
+}
+
 /** Espelha TrechoRegistradoDto: o trecho como o médico o vê, já sanitizado. */
 export interface TrechoRegistrado {
   sequencia: number;

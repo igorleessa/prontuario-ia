@@ -6,7 +6,7 @@ import { Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { AtendimentoDetalhe, CLASSE_STATUS, ROTULO_STATUS } from '../../core/models/atendimento.model';
 import { NotaExportavel, ResultadoExportacao } from '../../core/models/exportacao.model';
-import { RascunhoClinico } from '../../core/models/rascunho-clinico.model';
+import { OrigensRascunho, RascunhoClinico } from '../../core/models/rascunho-clinico.model';
 import { ModoTranscricao } from '../../core/models/transcricao.model';
 import { AppConfigService } from '../../core/services/app-config.service';
 import { AtendimentoService } from '../../core/services/atendimento.service';
@@ -159,6 +159,15 @@ export class AtendimentoComponent {
   readonly sugestoes = signal<Partial<Record<Campo, string>>>({});
   readonly destacados = signal<ReadonlySet<Campo>>(new Set());
   readonly sugestaoIa = signal<RascunhoClinico | null>(null);
+
+  /** De quais trechos a IA tirou cada campo; o medico confere a sugestao na propria fala. */
+  readonly origens = signal<OrigensRascunho>({});
+  readonly trechosDestacados = signal<ReadonlySet<number>>(new Set());
+  readonly campoComOrigem = signal<Campo | null>(null);
+
+  /** Texto selecionado na transcricao, que o medico pode marcar como dado pessoal. */
+  readonly selecaoTranscricao = signal<string | null>(null);
+  readonly protegendo = signal(false);
   readonly mostrarSugestao = signal(false);
   readonly agora = signal(Date.now());
 
@@ -295,9 +304,13 @@ export class AtendimentoComponent {
         this.dadosProtegidos.set(detalhe.dadosPessoaisProtegidos);
         this.segundosEscuta.set(detalhe.duracaoTranscricaoSegundos ?? 0);
 
-        const linhas = (detalhe.transcricao ?? '').split('\n').filter((linha) => linha.trim().length > 0);
-        this.trechos.set(linhas.map((texto, sequencia) => ({ sequencia, texto, estado: 'pronto' })));
-        this.proximaSequenciaDemonstracao = linhas.length;
+        // Atendimento do fluxo antigo nao tem trechos: a transcricao inteira vira um so.
+        const trechos = detalhe.trechos.length > 0
+          ? detalhe.trechos
+          : (detalhe.transcricao ? [{ sequencia: -1, texto: detalhe.transcricao, dadosProtegidos: 0 }] : []);
+        this.trechos.set(trechos.map(({ sequencia, texto }) => ({ sequencia, texto, estado: 'pronto' })));
+        this.proximaSequenciaDemonstracao = Math.max(-1, ...trechos.map((t) => t.sequencia)) + 1;
+        this.origens.set(detalhe.origensIA ?? {});
 
         this.preencherFormulario(detalhe.rascunho, detalhe.sugestaoIa);
 
@@ -429,9 +442,9 @@ export class AtendimentoComponent {
       await firstValueFrom(this.transcricoes.encerrar(this.id(), this.segundosEscuta()));
       this.atualizarStatus('EmRevisao');
 
-      if (this.trechos().some((trecho) => trecho.estado === 'pronto') &&
-          (this.trechosDesdeRascunho > 0 || this.rascunhoAtualizadoEm() === null)) {
-        await this.gerarRascunho();
+      // Passada final, com o modelo completo, sobre a consulta inteira.
+      if (this.trechos().some((trecho) => trecho.estado === 'pronto')) {
+        await this.gerarRascunho(true);
       }
     } catch (erro) {
       this.erro.set(this.mensagemDeErro(erro, 'Não foi possível encerrar a consulta.'));
@@ -443,6 +456,77 @@ export class AtendimentoComponent {
   /** Volta a ouvir depois de encerrada - o medico lembrou de algo antes de assinar. */
   voltarParaConsulta(): void {
     this.aceitarConsentimento();
+  }
+
+  /** Destaca na transcricao os trechos de onde a IA tirou o campo. Clicar de novo desliga. */
+  verOrigem(campo: Campo): void {
+    if (this.campoComOrigem() === campo) {
+      this.campoComOrigem.set(null);
+      this.trechosDestacados.set(new Set());
+      return;
+    }
+
+    const sequencias = this.origens()[campo] ?? [];
+    this.campoComOrigem.set(campo);
+    this.trechosDestacados.set(new Set(sequencias));
+    this.mostrarTranscricao.set(true);
+
+    setTimeout(() => {
+      const primeiro = document.getElementById(`trecho-${Math.min(...sequencias)}`);
+      primeiro?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }
+
+  quantidadeDeOrigens(campo: Campo): number {
+    return this.origens()[campo]?.length ?? 0;
+  }
+
+  /**
+   * Guarda o que o medico selecionou na transcricao. Selecao que inclui um
+   * dado ja protegido nao conta: o texto da etiqueta nao e o dado original.
+   */
+  capturarSelecao(): void {
+    const selecao = window.getSelection();
+    const lista = this.listaTranscricao()?.nativeElement;
+
+    if (!selecao || selecao.isCollapsed || !lista || !lista.contains(selecao.anchorNode)) {
+      this.selecaoTranscricao.set(null);
+      return;
+    }
+
+    const conteudo = selecao.getRangeAt(0).cloneContents();
+    const texto = selecao.toString().replace(/\s+/g, ' ').trim();
+    const valida = texto.length >= 2 && texto.length <= 120 && !conteudo.querySelector('.marcador-privado');
+
+    this.selecaoTranscricao.set(valida ? texto : null);
+  }
+
+  /** A sanitizacao deixou passar um dado pessoal: o medico o marca, e ele some da transcricao. */
+  async protegerSelecao(): Promise<void> {
+    const termo = this.selecaoTranscricao();
+    if (!termo || this.protegendo()) {
+      return;
+    }
+
+    this.protegendo.set(true);
+    this.erro.set(null);
+
+    try {
+      const atualizada = await firstValueFrom(this.transcricoes.protegerTermo(this.id(), termo));
+      const pendentes = this.trechos().filter((trecho) => trecho.estado !== 'pronto');
+      this.trechos.set([
+        ...atualizada.trechos.map(({ sequencia, texto }) => ({ sequencia, texto, estado: 'pronto' as const })),
+        ...pendentes,
+      ].sort((a, b) => a.sequencia - b.sequencia));
+      this.dadosProtegidos.set(atualizada.dadosProtegidos);
+      this.aviso.set('Trecho protegido: ele foi retirado da transcrição e vale para o resto da consulta.');
+      window.getSelection()?.removeAllRanges();
+      this.selecaoTranscricao.set(null);
+    } catch (erro) {
+      this.erro.set(this.mensagemDeErro(erro, 'Não foi possível proteger o trecho.'));
+    } finally {
+      this.protegendo.set(false);
+    }
   }
 
   alternarTranscricao(): void {
@@ -486,7 +570,12 @@ export class AtendimentoComponent {
       return [...outros, trecho].sort((a, b) => a.sequencia - b.sequencia);
     });
 
-    // A fala mais recente fica sempre a vista, como numa legenda.
+    // A fala mais recente fica sempre a vista, como numa legenda - a nao ser
+    // que o medico esteja conferindo a origem de um campo.
+    if (this.campoComOrigem() !== null) {
+      return;
+    }
+
     setTimeout(() => {
       const lista = this.listaTranscricao()?.nativeElement;
       lista?.scrollTo({ top: lista.scrollHeight, behavior: 'smooth' });
@@ -550,26 +639,34 @@ export class AtendimentoComponent {
     }
   }
 
-  /** Pede o rascunho sobre tudo o que foi dito ate agora. Tambem e o "tentar de novo" da revisao. */
-  gerarRascunho(): Promise<void> {
+  /**
+   * Pede o rascunho sobre tudo o que foi dito ate agora. A passada final
+   * (encerramento, "refazer") usa o modelo completo e espera a atualizacao em
+   * curso, que pode nao ter visto as ultimas falas.
+   */
+  async gerarRascunho(final = false): Promise<void> {
     if (this.rascunhoEmAndamento) {
-      return this.rascunhoEmAndamento;
+      if (!final) {
+        return this.rascunhoEmAndamento;
+      }
+      await this.rascunhoEmAndamento;
     }
 
-    this.rascunhoEmAndamento = this.pedirRascunho().finally(() => (this.rascunhoEmAndamento = null));
+    this.rascunhoEmAndamento = this.pedirRascunho(final).finally(() => (this.rascunhoEmAndamento = null));
     return this.rascunhoEmAndamento;
   }
 
-  private async pedirRascunho(): Promise<void> {
+  private async pedirRascunho(final: boolean): Promise<void> {
     this.gerandoRascunho.set(true);
     const considerados = this.trechosDesdeRascunho;
 
     try {
-      const rascunho = await firstValueFrom(this.transcricoes.gerarRascunho(this.id()));
+      const { rascunho, origens } = await firstValueFrom(this.transcricoes.gerarRascunho(this.id(), final));
       this.trechosDesdeRascunho = Math.max(0, this.trechosDesdeRascunho - considerados);
       this.ultimoRascunhoEm = Date.now();
       this.rascunhoAtualizadoEm.set(new Date());
       this.erroIA.set(null);
+      this.origens.set(origens ?? {});
       this.aplicarRascunho(rascunho);
     } catch (erro) {
       this.ultimoRascunhoEm = Date.now();

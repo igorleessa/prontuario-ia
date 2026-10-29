@@ -2,8 +2,8 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { RascunhoClinico } from '../models/rascunho-clinico.model';
-import { SessaoTranscricao, TrechoRegistrado } from '../models/transcricao.model';
+import { RascunhoComOrigens } from '../models/rascunho-clinico.model';
+import { SessaoTranscricao, TranscricaoAtualizada, TrechoRegistrado } from '../models/transcricao.model';
 
 /**
  * Rotas da consulta transcrita ao vivo. Nenhuma recebe a gravação da consulta:
@@ -44,9 +44,24 @@ export class TranscricaoService {
     );
   }
 
-  /** Refaz o rascunho do prontuário sobre o que já foi dito. */
-  gerarRascunho(atendimentoId: string): Observable<RascunhoClinico> {
-    return this.http.post<RascunhoClinico>(`${this.baseUrl}/${atendimentoId}/transcricao/rascunho`, {});
+  /**
+   * Refaz o rascunho do prontuário sobre o que já foi dito. A passada final
+   * (encerramento, "refazer") usa o modelo completo; durante a consulta, o rápido.
+   */
+  gerarRascunho(atendimentoId: string, final = false): Observable<RascunhoComOrigens> {
+    return this.http.post<RascunhoComOrigens>(
+      `${this.baseUrl}/${atendimentoId}/transcricao/rascunho`,
+      {},
+      { params: { final } },
+    );
+  }
+
+  /** O médico marcou um trecho da transcrição como dado pessoal que a sanitização deixou passar. */
+  protegerTermo(atendimentoId: string, termo: string): Observable<TranscricaoAtualizada> {
+    return this.http.post<TranscricaoAtualizada>(
+      `${this.baseUrl}/${atendimentoId}/transcricao/termos-protegidos`,
+      { termo },
+    );
   }
 
   encerrar(atendimentoId: string, duracaoSegundos: number): Observable<void> {

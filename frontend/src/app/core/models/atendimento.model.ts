@@ -1,4 +1,5 @@
-import { RascunhoClinico } from './rascunho-clinico.model';
+import { OrigensRascunho, RascunhoClinico } from './rascunho-clinico.model';
+import { TrechoRegistrado } from './transcricao.model';
 
 /** Espelha StatusAtendimento do backend, serializado como texto. */
 export type StatusAtendimento =
@@ -48,6 +49,10 @@ export interface AtendimentoDetalhe {
   /** Quantos dados pessoais a sanitização retirou do que foi dito. */
   dadosPessoaisProtegidos: number;
   pacienteContato: string | null;
+  /** Trechos da transcrição com a sequência real, a mesma que as origens da IA citam. */
+  trechos: TrechoRegistrado[];
+  /** De quais trechos a IA tirou cada campo do rascunho. */
+  origensIA: OrigensRascunho;
 }
 
 /** Espelha MetricasClinicaDto. O tempo economizado é estimativa declarada. */

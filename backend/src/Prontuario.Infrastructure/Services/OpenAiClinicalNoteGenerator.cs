@@ -50,6 +50,11 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
         - Escreva em portugues do Brasil, em terceira pessoa, no registro tecnico usado
           em prontuario, de forma concisa, sem repetir o dialogo literalmente.
 
+        Origem de cada campo:
+        - Cada trecho da transcricao comeca com o seu numero entre colchetes ("[12] ...").
+        - Em "origens", para cada campo, liste os numeros dos trechos de onde tirou o conteudo
+          dele, em ordem. Campo null tem lista vazia. Nao cite trecho que nao sustente o campo.
+
         O que vai em cada campo:
         - queixaPrincipal: o motivo da consulta em uma frase curta, com a duracao quando dita
           (ex.: "Tosse e dor de garganta ha 4 dias.").
@@ -87,7 +92,7 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
 
     public OpenAiClinicalNoteGenerator(IHttpClientFactory fabrica) => _fabrica = fabrica;
 
-    public async Task<RascunhoClinicoDto> GerarRascunhoAsync(
+    public async Task<RascunhoComOrigensDto> GerarRascunhoAsync(
         TextoSanitizado transcricao,
         CredenciaisIA credenciais,
         ContextoGeracao contexto,
@@ -145,7 +150,39 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
         var rascunho = JsonSerializer.Deserialize<RascunhoClinicoDto>(conteudo, OpcoesJson)
             ?? throw new InvalidOperationException("Nao foi possivel interpretar o rascunho devolvido pela IA.");
 
-        return Normalizar(rascunho);
+        return new RascunhoComOrigensDto(Normalizar(rascunho), LerOrigens(conteudo));
+    }
+
+    /// <summary>Origens por campo; o que nao for lista de inteiros e ignorado, nao derruba o rascunho.</summary>
+    internal static IReadOnlyDictionary<string, IReadOnlyList<int>> LerOrigens(string conteudo)
+    {
+        using var json = JsonDocument.Parse(conteudo);
+        if (!json.RootElement.TryGetProperty("origens", out var origens) || origens.ValueKind != JsonValueKind.Object)
+        {
+            return RascunhoComOrigensDto.SemOrigens;
+        }
+
+        var resultado = new Dictionary<string, IReadOnlyList<int>>();
+        foreach (var campo in origens.EnumerateObject())
+        {
+            if (campo.Value.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            var numeros = campo.Value.EnumerateArray()
+                .Where(item => item.ValueKind == JsonValueKind.Number && item.TryGetInt32(out _))
+                .Select(item => item.GetInt32())
+                .Distinct()
+                .ToList();
+
+            if (numeros.Count > 0)
+            {
+                resultado[campo.Name] = numeros;
+            }
+        }
+
+        return resultado;
     }
 
     /// <summary>
@@ -330,14 +367,27 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
             ["conduta"] = "Prescricoes, exames, orientacoes, sinais de alarme, atestado, encaminhamento e retorno, um item por linha.",
         };
 
+        var propriedades = campos.ToDictionary(
+            campo => campo.Key,
+            campo => (object)new { type = new[] { "string", "null" }, description = campo.Value });
+
+        propriedades["origens"] = new
+        {
+            type = "object",
+            description = "Numeros dos trechos da transcricao que sustentam cada campo.",
+            additionalProperties = false,
+            required = campos.Keys.ToArray(),
+            properties = campos.Keys.ToDictionary(
+                campo => campo,
+                _ => (object)new { type = "array", items = new { type = "integer" } }),
+        };
+
         return new
         {
             type = "object",
             additionalProperties = false,
-            required = campos.Keys.ToArray(),
-            properties = campos.ToDictionary(
-                campo => campo.Key,
-                campo => (object)new { type = new[] { "string", "null" }, description = campo.Value }),
+            required = propriedades.Keys.ToArray(),
+            properties = propriedades,
         };
     }
 }

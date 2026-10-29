@@ -266,9 +266,36 @@
             </button>
 
             @if (mostrarTranscricao()) {
-              <ol class="transcricao__lista" aria-live="polite" #listaTranscricao>
+              @if (selecaoTranscricao(); as selecao) {
+                <div class="protecao" role="status">
+                  <app-icone nome="privacidade" [tamanho]="15" />
+                  <span class="protecao__texto">Proteger “{{ selecao }}” como dado pessoal?</span>
+                  <button type="button" class="botao botao--pequeno" [disabled]="protegendo()" (mousedown)="$event.preventDefault()"
+                          (click)="protegerSelecao()">
+                    {{ protegendo() ? 'Protegendo…' : 'Proteger' }}
+                  </button>
+                  <button type="button" class="botao botao--discreto botao--pequeno botao--icone" aria-label="Cancelar"
+                          (click)="selecaoTranscricao.set(null)">
+                    <app-icone nome="fechar" [tamanho]="14" />
+                  </button>
+                </div>
+              } @else if (campoComOrigem()) {
+                <div class="protecao protecao--origem" role="status">
+                  <app-icone nome="ia" [tamanho]="15" />
+                  <span class="protecao__texto">Trechos de onde a IA tirou o campo destacado.</span>
+                  <button type="button" class="botao botao--discreto botao--pequeno botao--icone" aria-label="Limpar destaque"
+                          (click)="verOrigem(campoComOrigem()!)">
+                    <app-icone nome="fechar" [tamanho]="14" />
+                  </button>
+                </div>
+              }
+
+              <ol class="transcricao__lista" aria-live="polite" #listaTranscricao
+                  (mouseup)="capturarSelecao()" (keyup)="capturarSelecao()">
                 @for (trecho of trechos(); track trecho.sequencia) {
-                  <li class="trecho" [class.trecho--pendente]="trecho.estado === 'transcrevendo'"
+                  <li class="trecho" [id]="'trecho-' + trecho.sequencia"
+                      [class.trecho--pendente]="trecho.estado === 'transcrevendo'"
+                      [class.trecho--origem]="trechosDestacados().has(trecho.sequencia)"
                       [class.trecho--falhou]="trecho.estado === 'falhou'">
                     @switch (trecho.estado) {
                       @case ('transcrevendo') {
@@ -321,7 +348,7 @@
               }
               @if (etapa() === 'revisao' && trechos().length) {
                 <button type="button" class="botao botao--discreto botao--pequeno" [disabled]="gerandoRascunho()"
-                        (click)="gerarRascunho()" title="Pedir à IA um novo rascunho sobre a transcrição">
+                        (click)="gerarRascunho(true)" title="Pedir à IA um novo rascunho sobre a transcrição">
                   <app-icone nome="refazer" [tamanho]="14" /> Refazer rascunho
                 </button>
               }
@@ -355,6 +382,15 @@
                   <label class="campo__rotulo" [for]="campo.chave">
                     <span class="campo-clinico__icone"><app-icone [nome]="campo.icone" [tamanho]="15" /></span>
                     {{ campo.rotulo }}
+                    @if (quantidadeDeOrigens(campo.chave) > 0 && origem()[campo.chave] !== 'vazio') {
+                      <button type="button" class="campo-clinico__origem"
+                              [class.campo-clinico__origem--ativa]="campoComOrigem() === campo.chave"
+                              (click)="verOrigem(campo.chave)"
+                              [attr.aria-pressed]="campoComOrigem() === campo.chave"
+                              title="Ver na transcrição de onde a IA tirou este campo">
+                        <app-icone nome="nota" [tamanho]="12" /> origem · {{ quantidadeDeOrigens(campo.chave) }}
+                      </button>
+                    }
                     @switch (origem()[campo.chave]) {
                       @case ('ia') { <span class="etiqueta etiqueta--ia"><app-icone nome="ia" [tamanho]="12" /> IA</span> }
                       @case ('medico') { <span class="etiqueta etiqueta--medico"><app-icone nome="caneta" [tamanho]="12" /> Editado por você</span> }

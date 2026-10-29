@@ -19,4 +19,7 @@ public class RascunhoIA : BaseEntity
     public string? HipoteseDiagnostica { get; set; }
     public string? Cid10Sugerido { get; set; }
     public string? Conduta { get; set; }
+
+    /// <summary>Origem de cada campo (JSON: campo -> sequencias dos trechos). Nao carrega texto da consulta.</summary>
+    public string? OrigensJson { get; set; }
 }
