@@ -23,25 +23,11 @@ export class AtendimentoService {
     return this.http.post<{ id: string }>(this.baseUrl, { pacienteRefId, templateNotaId });
   }
 
-  /** Envia o audio da consulta e dispara a transcricao e a extracao (RF06/RF07/RF08). */
-  enviarAudio(
-    atendimentoId: string,
-    audio: Blob,
-    extensao: string,
-    duracaoSegundos: number,
-  ): Observable<void> {
-    const corpo = new FormData();
-    corpo.append('audio', audio, `consulta.${extensao}`);
-    corpo.append('duracaoSegundos', String(duracaoSegundos));
-
-    return this.http.post<void>(`${this.baseUrl}/${atendimentoId}/audio`, corpo);
-  }
-
   registrarConsentimento(atendimentoId: string): Observable<void> {
     return this.http.post<void>(`${this.baseUrl}/${atendimentoId}/consentimento`, {});
   }
 
-  /** Marca o fim da captura de audio e a entrada na revisao do medico (RF09). */
+  /** Segue direto para a revisão, sem transcrição (paciente que recusou, preenchimento manual). */
   iniciarRevisao(atendimentoId: string): Observable<void> {
     return this.http.post<void>(`${this.baseUrl}/${atendimentoId}/revisao`, {});
   }
@@ -62,16 +48,6 @@ export class AtendimentoService {
   /** Números da clínica para a tela inicial (tempo economizado é estimativa). */
   metricas(): Observable<MetricasClinica> {
     return this.http.get<MetricasClinica>(`${this.baseUrl}/metricas`);
-  }
-
-  /** Roda o pipeline sobre a consulta de exemplo, sem microfone — modo demonstração. */
-  simular(atendimentoId: string): Observable<void> {
-    return this.http.post<void>(`${this.baseUrl}/${atendimentoId}/simular`, {});
-  }
-
-  /** Refaz a transcrição e a extração do áudio já gravado, sem duplicar o atendimento (RF13). */
-  reprocessar(atendimentoId: string): Observable<void> {
-    return this.http.post<void>(`${this.baseUrl}/${atendimentoId}/reprocessar`, {});
   }
 
   /** Nota clínica gravada e estado da exportação (RF20) — o que de fato foi enviado ao EMR. */

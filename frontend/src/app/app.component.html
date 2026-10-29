@@ -1,40 +1,95 @@
 @if (autenticado()) {
-  <header class="cabecalho">
-    <div class="cabecalho__conteudo">
-      <a class="marca" routerLink="/atendimentos">
-        <span class="marca__simbolo" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-               stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 12h3l2.5 6 4-14L15 12h6" />
-          </svg>
+  <div class="estrutura" [class.estrutura--menu-aberto]="menuAberto()">
+    <aside class="lateral" aria-label="Navegação principal">
+      <a class="marca" routerLink="/atendimentos" (click)="fecharMenu()">
+        <span class="marca__simbolo">
+          <app-icone nome="estetoscopio" [tamanho]="20" />
         </span>
         <span class="marca__texto">
           <strong>Prontuário IA</strong>
-          @if (usuario(); as u) {
-            <small>{{ u.clinicaNome }} · modo {{ u.modoOperacao }}</small>
-          }
+          <small>Documentação clínica assistida</small>
         </span>
       </a>
 
-      <div class="cabecalho__usuario">
-        <a class="botao botao--discreto" routerLink="/perfil">Meu perfil</a>
-        @if (administrador()) {
-          <a class="botao botao--discreto" routerLink="/auditoria">Auditoria</a>
-          <a class="botao botao--discreto" routerLink="/configuracoes">Configurações</a>
-        }
-        @if (usuario(); as u) {
-          <span class="avatar" aria-hidden="true">{{ iniciais() }}</span>
-          <span class="cabecalho__nome">
-            <strong>{{ u.nome }}</strong>
-            <small>{{ u.email }}</small>
+      @if (usuario(); as u) {
+        <div class="clinica">
+          <app-icone nome="clinica" [tamanho]="16" />
+          <span>
+            <strong>{{ u.clinicaNome }}</strong>
+            <small>{{ u.modoOperacao === 'Conector' ? 'Conectada ao EMR' : 'Prontuário integrado' }}</small>
           </span>
-        }
-        <button type="button" class="botao botao--discreto" (click)="sair()">Sair</button>
-      </div>
-    </div>
-  </header>
-}
+        </div>
+      }
 
-<main class="conteudo" [class.conteudo--limpo]="!autenticado()">
-  <router-outlet />
-</main>
+      <nav class="menu">
+        <span class="menu__grupo">Atendimento</span>
+        <a class="menu__item" routerLink="/atendimentos" routerLinkActive="menu__item--ativo"
+           [routerLinkActiveOptions]="{ exact: true }" (click)="fecharMenu()">
+          <app-icone nome="painel" /> Painel
+        </a>
+        <a class="menu__item" routerLink="/atendimentos/novo" routerLinkActive="menu__item--ativo"
+           (click)="fecharMenu()">
+          <app-icone nome="nova-consulta" /> Nova consulta
+        </a>
+        <a class="menu__item" routerLink="/pacientes" routerLinkActive="menu__item--ativo"
+           (click)="fecharMenu()">
+          <app-icone nome="pacientes" /> Pacientes
+        </a>
+
+        @if (administrador()) {
+          <span class="menu__grupo">Clínica</span>
+          <a class="menu__item" routerLink="/auditoria" routerLinkActive="menu__item--ativo"
+             (click)="fecharMenu()">
+            <app-icone nome="auditoria" /> Auditoria
+          </a>
+          <a class="menu__item" routerLink="/configuracoes" routerLinkActive="menu__item--ativo"
+             (click)="fecharMenu()">
+            <app-icone nome="configuracoes" /> Configurações
+          </a>
+        }
+      </nav>
+
+      <div class="privacidade">
+        <app-icone nome="privacidade" [tamanho]="16" />
+        <p>Sem gravação de áudio. Dados pessoais protegidos antes da IA.</p>
+      </div>
+
+      @if (usuario(); as u) {
+        <div class="usuario">
+          <a class="usuario__perfil" routerLink="/perfil" (click)="fecharMenu()" title="Meu perfil">
+            <app-avatar [nome]="u.nome" [tamanho]="2.25" />
+            <span>
+              <strong>{{ u.nome }}</strong>
+              <small>{{ u.papel === 'Administrador' ? 'Administrador' : 'Médico' }}</small>
+            </span>
+          </a>
+          <button type="button" class="usuario__sair" (click)="sair()" title="Sair" aria-label="Sair">
+            <app-icone nome="sair" />
+          </button>
+        </div>
+      }
+    </aside>
+
+    <div class="principal">
+      <header class="barra-movel">
+        <button type="button" class="botao botao--discreto botao--icone" (click)="alternarMenu()"
+                aria-label="Abrir menu">
+          <app-icone nome="menu" />
+        </button>
+        <span class="barra-movel__marca">
+          <app-icone nome="estetoscopio" [tamanho]="18" /> Prontuário IA
+        </span>
+      </header>
+
+      <main class="conteudo">
+        <router-outlet />
+      </main>
+    </div>
+
+    <button type="button" class="cortina" aria-label="Fechar menu" tabindex="-1" (click)="fecharMenu()"></button>
+  </div>
+} @else {
+  <main>
+    <router-outlet />
+  </main>
+}

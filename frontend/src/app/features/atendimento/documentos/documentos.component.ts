@@ -2,6 +2,7 @@ import { Component, computed, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DocumentoClinico, ROTULO_DOCUMENTO } from '../../../core/models/template.model';
 import { DocumentoService } from '../../../core/services/documento.service';
+import { IconeComponent, NomeIcone } from '../../../shared/icone.component';
 
 type Tipo = DocumentoClinico['tipo'];
 
@@ -13,7 +14,7 @@ type Tipo = DocumentoClinico['tipo'];
 @Component({
   selector: 'app-documentos',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, IconeComponent],
   templateUrl: './documentos.component.html',
   styleUrl: './documentos.component.scss',
 })
@@ -34,6 +35,12 @@ export class DocumentosComponent {
 
   readonly tipos: Tipo[] = ['Receita', 'PedidoExame', 'Atestado', 'Encaminhamento'];
   readonly rotulo = ROTULO_DOCUMENTO;
+  readonly icone: Record<Tipo, NomeIcone> = {
+    Receita: 'conduta',
+    PedidoExame: 'exame',
+    Atestado: 'documento',
+    Encaminhamento: 'enviar',
+  };
 
   readonly vazio = computed(() => this.lista().length === 0);
 

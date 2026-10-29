@@ -3,8 +3,7 @@ import { RascunhoClinico } from './rascunho-clinico.model';
 /** Espelha StatusAtendimento do backend, serializado como texto. */
 export type StatusAtendimento =
   | 'AguardandoConsentimento'
-  | 'EmGravacao'
-  | 'ProcessandoIA'
+  | 'EmConsulta'
   | 'EmRevisao'
   | 'Finalizado'
   | 'Cancelado';
@@ -17,7 +16,7 @@ export interface AtendimentoResumo {
   medicoNome: string;
   dataHora: string;
   status: StatusAtendimento;
-  consentimentoGravacao: boolean;
+  consentimentoTranscricao: boolean;
 }
 
 /** Espelha AtendimentoDetalheDto do backend. */
@@ -30,18 +29,25 @@ export interface AtendimentoDetalhe {
   medicoNome: string;
   dataHora: string;
   status: StatusAtendimento;
-  consentimentoGravacao: boolean;
+  consentimentoTranscricao: boolean;
   consentimentoEm: string | null;
   rascunho: RascunhoClinico;
   /** Sugestão original da IA, preservada mesmo depois das edições do médico. */
   sugestaoIa: RascunhoClinico | null;
-  /** Texto que o STT extraiu do áudio; null enquanto não houver gravação processada. */
+  /**
+   * Transcrição da consulta para exibição: o paciente aparece pelo nome do
+   * cadastro, e os dados de terceiros como marcadores ([PESSOA], [TELEFONE]).
+   */
   transcricao: string | null;
   /** Motivo da falha do pipeline de IA, quando houve uma. */
   erroProcessamentoIA: string | null;
   /** Modelo de especialidade usado na extração; null quando foi o genérico. */
   templateNome: string | null;
-  duracaoGravacaoSegundos: number | null;
+  /** Tempo efetivo de escuta, sem as pausas. */
+  duracaoTranscricaoSegundos: number | null;
+  /** Quantos dados pessoais a sanitização retirou do que foi dito. */
+  dadosPessoaisProtegidos: number;
+  pacienteContato: string | null;
 }
 
 /** Espelha MetricasClinicaDto. O tempo economizado é estimativa declarada. */
@@ -75,8 +81,7 @@ export interface HistoricoAtendimento {
 
 export const ROTULO_STATUS: Record<StatusAtendimento, string> = {
   AguardandoConsentimento: 'Aguardando consentimento',
-  EmGravacao: 'Em gravação',
-  ProcessandoIA: 'Processando IA',
+  EmConsulta: 'Em consulta',
   EmRevisao: 'Em revisão',
   Finalizado: 'Finalizado',
   Cancelado: 'Cancelado',
@@ -85,9 +90,10 @@ export const ROTULO_STATUS: Record<StatusAtendimento, string> = {
 /** Sufixo da classe .selo--* que colore cada status. */
 export const CLASSE_STATUS: Record<StatusAtendimento, string> = {
   AguardandoConsentimento: 'aguardando',
-  EmGravacao: 'gravacao',
-  ProcessandoIA: 'processando',
+  EmConsulta: 'consulta',
   EmRevisao: 'revisao',
   Finalizado: 'finalizado',
   Cancelado: 'cancelado',
 };
+
+export const STATUS_EM_ANDAMENTO: StatusAtendimento[] = ['AguardandoConsentimento', 'EmConsulta', 'EmRevisao'];

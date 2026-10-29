@@ -1,20 +1,26 @@
-<div class="cartao">
-  <div class="cartao__corpo">
-    <h2>Exportação para o EMR</h2>
-    <p class="secao__texto">
-      Para onde a nota clínica revisada é enviada e com que chave o sistema do cliente abre
-      atendimentos aqui. É a configuração da modalidade Conector.
-    </p>
+<section class="cartao">
+  <div class="cartao__topo">
+    <div class="cartao__titulo">
+      <span class="cartao__titulo-icone"><app-icone nome="webhook" [tamanho]="16" /></span>
+      <div>
+        <h2>Exportação para o EMR</h2>
+        <p class="secao__texto">
+          Para onde a nota revisada é enviada e com que chave o sistema do cliente abre atendimentos aqui.
+        </p>
+      </div>
+    </div>
+  </div>
+  <div class="cartao__corpo corpo">
 
     @if (!modoConector()) {
-      <p class="aviso aviso--info">
+      <p class="aviso aviso--info"><app-icone nome="info" [tamanho]="16" />
         Esta clínica opera no modo Integrado — o prontuário fica neste sistema. A exportação
         continua disponível para enviar cópias da nota a um sistema externo.
       </p>
     }
 
     @if (erro()) {
-      <p class="aviso aviso--erro" role="alert">{{ erro() }}</p>
+      <p class="aviso aviso--erro" role="alert"><app-icone nome="alerta" [tamanho]="16" />{{ erro() }}</p>
     }
     @if (sucesso()) {
       <p class="aviso aviso--sucesso" role="status">{{ sucesso() }}</p>
@@ -24,7 +30,7 @@
       <div class="vazio">Carregando…</div>
     } @else {
       <div class="estado" [class.estado--ativo]="configuracao()?.webhookUrl">
-        <span class="estado__ponto" aria-hidden="true"></span>
+        <span class="estado__icone"><app-icone [nome]="configuracao()?.webhookUrl ? 'concluido' : 'enviar'" /></span>
         <div>
           @if (configuracao()?.webhookUrl) {
             <strong>Envio automático ativo</strong>
@@ -88,7 +94,7 @@
       }
 
       <section class="chave">
-        <h3>Chave de integração</h3>
+        <h3><app-icone nome="chave" [tamanho]="15" /> Chave de integração</h3>
         <p class="secao__texto">
           Permite que o EMR do cliente abra um atendimento por API, sem recadastrar o paciente:
           <code>POST /api/integracao/atendimentos</code> com o cabeçalho <code>X-Api-Key</code>.
@@ -127,4 +133,4 @@
       </section>
     }
   </div>
-</div>
+</section>

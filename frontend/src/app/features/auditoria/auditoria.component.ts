@@ -3,6 +3,7 @@ import { Component, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { LogAuditoria, ROTULO_ACAO } from '../../core/models/auditoria.model';
 import { AuditoriaService } from '../../core/services/auditoria.service';
+import { IconeComponent } from '../../shared/icone.component';
 
 /**
  * Trilha de auditoria da clinica (RF11). Somente leitura por definicao: nem
@@ -12,7 +13,7 @@ import { AuditoriaService } from '../../core/services/auditoria.service';
 @Component({
   selector: 'app-auditoria',
   standalone: true,
-  imports: [RouterLink, DatePipe],
+  imports: [RouterLink, DatePipe, IconeComponent],
   templateUrl: './auditoria.component.html',
   styleUrl: './auditoria.component.scss',
 })
@@ -31,7 +32,8 @@ export class AuditoriaComponent {
     'atendimento.aberto',
     'atendimento.lido',
     'consentimento.registrado',
-    'audio.enviado',
+    'transcricao.iniciada',
+    'rascunho.gerado',
     'registro.confirmado',
     'nota.exportada',
     'nota.pdf',

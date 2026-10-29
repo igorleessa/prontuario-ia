@@ -1,33 +1,38 @@
 <section class="cartao">
-  <div class="cartao__corpo">
-    <h2>Documentos da consulta</h2>
-    <p class="secao__texto">
-      Receita, pedido de exame, atestado e encaminhamento redigidos a partir da mesma consulta.
-      Como a nota clínica, saem como rascunho — revise antes de entregar ao paciente.
-    </p>
+  <div class="cartao__topo">
+    <div class="cartao__titulo">
+      <span class="cartao__titulo-icone"><app-icone nome="documento" [tamanho]="16" /></span>
+      <div>
+        <h2>Documentos da consulta</h2>
+        <p class="secao__texto">Redigidos a partir da mesma consulta. Revise antes de entregar ao paciente.</p>
+      </div>
+    </div>
+  </div>
 
+  <div class="cartao__corpo corpo">
     @if (erro()) {
-      <p class="aviso aviso--erro" role="alert">{{ erro() }}</p>
+      <p class="aviso aviso--erro" role="alert"><app-icone nome="alerta" [tamanho]="16" /> {{ erro() }}</p>
     }
 
     @if (!bloqueado()) {
-      <div class="acoes">
+      <div class="tipos">
         @for (tipo of tipos; track tipo) {
-          <button type="button" class="botao botao--secundario" [disabled]="gerando() !== null"
-                  (click)="gerar(tipo)">
-            {{ gerando() === tipo ? 'Redigindo…' : 'Gerar ' + rotulo[tipo].toLowerCase() }}
+          <button type="button" class="tipo" [disabled]="gerando() !== null" (click)="gerar(tipo)">
+            <span class="tipo__icone">
+              @if (gerando() === tipo) { <span class="giro"></span> } @else { <app-icone [nome]="icone[tipo]" [tamanho]="18" /> }
+            </span>
+            <span class="tipo__texto">
+              <strong>{{ rotulo[tipo] }}</strong>
+              <small>{{ gerando() === tipo ? 'Redigindo…' : 'Gerar com IA' }}</small>
+            </span>
           </button>
         }
       </div>
     }
 
     @if (vazio()) {
-      <p class="secao__texto secao__texto--tenue">
-        @if (bloqueado()) {
-          Nenhum documento foi gerado neste atendimento.
-        } @else {
-          Nenhum documento gerado ainda.
-        }
+      <p class="secao__texto">
+        {{ bloqueado() ? 'Nenhum documento foi gerado neste atendimento.' : 'Nenhum documento gerado ainda.' }}
       </p>
     } @else {
       <ul class="documentos">
@@ -35,13 +40,10 @@
           <li class="documento">
             <button type="button" class="documento__topo" (click)="alternar(documento.id)"
                     [attr.aria-expanded]="aberto() === documento.id">
+              <app-icone [nome]="icone[documento.tipo]" [tamanho]="16" />
               <strong>{{ rotulo[documento.tipo] }}</strong>
-              @if (alterado(documento)) {
-                <span class="documento__marca">não salvo</span>
-              }
-              <span class="documento__seta" aria-hidden="true">
-                {{ aberto() === documento.id ? '−' : '+' }}
-              </span>
+              @if (alterado(documento)) { <span class="etiqueta etiqueta--alerta">não salvo</span> }
+              <app-icone class="documento__seta" [nome]="aberto() === documento.id ? 'ocultar' : 'ver'" [tamanho]="15" />
             </button>
 
             @if (aberto() === documento.id) {
@@ -49,20 +51,20 @@
                 @if (bloqueado()) {
                   <pre class="documento__texto">{{ documento.conteudo }}</pre>
                 } @else {
-                  <textarea rows="10" [ngModel]="conteudo(documento)"
-                            (ngModelChange)="editar(documento.id, $event)"></textarea>
+                  <div class="campo">
+                    <textarea rows="10" [ngModel]="conteudo(documento)" (ngModelChange)="editar(documento.id, $event)"></textarea>
+                  </div>
                 }
 
                 <div class="acoes">
                   @if (!bloqueado()) {
-                    <button type="button" class="botao"
-                            [disabled]="!alterado(documento) || salvando() === documento.id"
-                            (click)="salvar(documento)">
+                    <button type="button" class="botao botao--pequeno"
+                            [disabled]="!alterado(documento) || salvando() === documento.id" (click)="salvar(documento)">
                       {{ salvando() === documento.id ? 'Salvando…' : 'Salvar revisão' }}
                     </button>
                   }
-                  <button type="button" class="botao botao--secundario" (click)="baixarPdf(documento)">
-                    Baixar PDF
+                  <button type="button" class="botao botao--secundario botao--pequeno" (click)="baixarPdf(documento)">
+                    <app-icone nome="baixar" [tamanho]="14" /> Baixar PDF
                   </button>
                 </div>
               </div>

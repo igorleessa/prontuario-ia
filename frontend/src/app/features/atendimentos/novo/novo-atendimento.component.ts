@@ -1,17 +1,19 @@
-import { Component, computed, inject, signal } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { FormsModule } from '@angular/forms';
+import { Component, computed, effect, inject, input, signal } from '@angular/core';
+import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { Paciente } from '../../../core/models/paciente.model';
 import { TemplateNota } from '../../../core/models/template.model';
 import { AtendimentoService } from '../../../core/services/atendimento.service';
 import { PacienteService } from '../../../core/services/paciente.service';
 import { TemplateService } from '../../../core/services/template.service';
+import { AvatarComponent } from '../../../shared/avatar.component';
+import { IconeComponent } from '../../../shared/icone.component';
+import { cpfMascarado, idade } from '../../../shared/pessoa';
 
 @Component({
   selector: 'app-novo-atendimento',
   standalone: true,
-  imports: [RouterLink, FormsModule, ReactiveFormsModule],
+  imports: [RouterLink, FormsModule, ReactiveFormsModule, IconeComponent, AvatarComponent],
   templateUrl: './novo-atendimento.component.html',
   styleUrl: './novo-atendimento.component.scss',
 })
@@ -20,6 +22,9 @@ export class NovoAtendimentoComponent {
   private readonly atendimentos = inject(AtendimentoService);
   private readonly templates = inject(TemplateService);
   private readonly router = inject(Router);
+
+  /** ?paciente=ID vindo da lista de pacientes: já chega com o paciente escolhido. */
+  readonly paciente = input<string | undefined>();
 
   readonly carregando = signal(true);
   readonly erro = signal<string | null>(null);
@@ -33,16 +38,25 @@ export class NovoAtendimentoComponent {
   readonly modelos = signal<TemplateNota[]>([]);
   readonly modeloEscolhido = signal<string>('');
 
+  readonly cpfMascarado = cpfMascarado;
+
   readonly filtrados = computed(() => {
     const termo = this.busca().trim().toLowerCase();
+    const digitos = termo.replace(/\D/g, '');
     if (termo === '') {
       return this.lista();
     }
 
     return this.lista().filter(
-      (p) => p.nome.toLowerCase().includes(termo) || (p.cpf ?? '').includes(termo),
+      (p) =>
+        p.nome.toLowerCase().includes(termo) ||
+        (digitos.length > 0 && (p.cpf ?? '').replace(/\D/g, '').includes(digitos)),
     );
   });
+
+  readonly modeloSelecionado = computed(
+    () => this.modelos().find((modelo) => modelo.id === this.modeloEscolhido()) ?? null,
+  );
 
   readonly formPaciente = inject(FormBuilder).nonNullable.group({
     nome: ['', Validators.required],
@@ -59,6 +73,17 @@ export class NovoAtendimentoComponent {
     this.templates.listar().subscribe({
       next: (modelos) => this.modelos.set(modelos),
     });
+
+    effect(
+      () => {
+        const id = this.paciente();
+        const encontrado = id ? this.lista().find((p) => p.id === id) : undefined;
+        if (encontrado && !this.selecionado()) {
+          this.selecionado.set(encontrado);
+        }
+      },
+      { allowSignalWrites: true },
+    );
   }
 
   carregarPacientes(): void {
@@ -82,7 +107,6 @@ export class NovoAtendimentoComponent {
 
   alternarCadastro(): void {
     this.cadastrando.update((valor) => !valor);
-    this.selecionado.set(null);
     this.formPaciente.reset();
   }
 
@@ -133,22 +157,7 @@ export class NovoAtendimentoComponent {
   }
 
   idade(dataNascimento: string | null): string | null {
-    if (!dataNascimento) {
-      return null;
-    }
-
-    const nascimento = new Date(dataNascimento);
-    const hoje = new Date();
-    let anos = hoje.getFullYear() - nascimento.getFullYear();
-
-    const aniversarioAindaNaoOcorreu =
-      hoje.getMonth() < nascimento.getMonth() ||
-      (hoje.getMonth() === nascimento.getMonth() && hoje.getDate() < nascimento.getDate());
-
-    if (aniversarioAindaNaoOcorreu) {
-      anos -= 1;
-    }
-
-    return `${anos} anos`;
+    const anos = idade(dataNascimento);
+    return anos === null ? null : `${anos} anos`;
   }
 }

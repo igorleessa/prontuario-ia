@@ -3,6 +3,8 @@ import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { PerfilMedico } from '../../core/models/template.model';
 import { PerfilService } from '../../core/services/perfil.service';
+import { AvatarComponent } from '../../shared/avatar.component';
+import { IconeComponent } from '../../shared/icone.component';
 
 /**
  * Preferencias de redacao do proprio medico. E o que aproxima a nota do jeito
@@ -12,7 +14,7 @@ import { PerfilService } from '../../core/services/perfil.service';
 @Component({
   selector: 'app-perfil',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, IconeComponent, AvatarComponent],
   templateUrl: './perfil.component.html',
   styleUrl: './perfil.component.scss',
 })

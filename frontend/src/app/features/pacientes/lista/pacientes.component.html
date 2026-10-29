@@ -1,0 +1,63 @@
+<div class="pagina">
+  <div class="pagina-topo">
+    <div class="pagina-topo__titulo">
+      <span class="pagina-topo__sobretitulo"><app-icone nome="pacientes" [tamanho]="14" /> Pacientes</span>
+      <h1>Pacientes da clínica</h1>
+      <p class="pagina-topo__subtitulo">Histórico de atendimentos e acesso rápido a uma nova consulta.</p>
+    </div>
+    <a class="botao" routerLink="/atendimentos/novo"><app-icone nome="novo-paciente" [tamanho]="16" /> Novo paciente</a>
+  </div>
+
+  @if (erro()) {
+    <p class="aviso aviso--erro" role="alert"><app-icone nome="alerta" [tamanho]="16" /> {{ erro() }}</p>
+  }
+
+  <section class="cartao">
+    <div class="filtros">
+      <div class="campo busca">
+        <label class="visualmente-oculto" for="busca">Buscar paciente</label>
+        <app-icone nome="buscar" [tamanho]="16" />
+        <input id="busca" type="search" placeholder="Buscar por nome ou CPF…"
+               [ngModel]="busca()" (ngModelChange)="busca.set($event)" />
+      </div>
+      <span class="filtros__total">{{ filtrados().length }} de {{ lista().length }}</span>
+    </div>
+
+    @if (carregando()) {
+      <div class="vazio"><span class="giro"></span> Carregando pacientes…</div>
+    } @else if (filtrados().length === 0) {
+      <div class="vazio">
+        <span class="vazio__icone"><app-icone nome="paciente" /></span>
+        <span class="vazio__titulo">Nenhum paciente encontrado</span>
+        <p>O cadastro é feito ao abrir uma nova consulta.</p>
+      </div>
+    } @else {
+      <ul class="grade">
+        @for (p of filtrados(); track p.id) {
+          <li class="paciente">
+            <a class="paciente__corpo" [routerLink]="['/pacientes', p.id]">
+              <app-avatar [nome]="p.nome" [tamanho]="2.75" />
+              <span class="paciente__info">
+                <strong>{{ p.nome }}</strong>
+                <small>
+                  @if (idade(p.dataNascimento); as anos) { <span>{{ anos }}</span> }
+                  @if (p.cpf) { <span>CPF {{ cpfMascarado(p.cpf) }}</span> }
+                  @if (p.idExternoEmr) { <span>EMR {{ p.idExternoEmr }}</span> }
+                </small>
+              </span>
+            </a>
+            <div class="paciente__acoes">
+              <a class="botao botao--discreto botao--pequeno" [routerLink]="['/pacientes', p.id]">
+                <app-icone nome="historico" [tamanho]="14" /> Histórico
+              </a>
+              <a class="botao botao--secundario botao--pequeno" routerLink="/atendimentos/novo"
+                 [queryParams]="{ paciente: p.id }">
+                <app-icone nome="nova-consulta" [tamanho]="14" /> Consulta
+              </a>
+            </div>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+</div>

@@ -8,6 +8,7 @@ import {
 } from '../../../core/models/exportacao.model';
 import { AuthService } from '../../../core/services/auth.service';
 import { ConfiguracaoExportacaoService } from '../../../core/services/configuracao-exportacao.service';
+import { IconeComponent } from '../../../shared/icone.component';
 
 /**
  * Saida da Modalidade B: para onde a nota revisada e enviada e com que chave o
@@ -18,7 +19,7 @@ import { ConfiguracaoExportacaoService } from '../../../core/services/configurac
 @Component({
   selector: 'app-configuracao-exportacao',
   standalone: true,
-  imports: [ReactiveFormsModule, DatePipe],
+  imports: [ReactiveFormsModule, DatePipe, IconeComponent],
   templateUrl: './configuracao-exportacao.component.html',
   styleUrl: './configuracao-exportacao.component.scss',
 })
