@@ -85,6 +85,34 @@ public class SanitizadorDadosTests
     public void TerceiroCitadoNaConsulta_ViraMarcador(string texto, string esperado)
         => Assert.Equal(esperado, Sanitizar(texto));
 
+    [Theory]
+    [InlineData("A Mariana trouxe os exames ontem.", "A [PESSOA] trouxe os exames ontem.")]
+    [InlineData("Quem vem buscar é o Rafael Gonçalves.", "Quem vem buscar é o [PESSOA].")]
+    [InlineData("Thiago Ferreira da Silva ligou cedo.", "[PESSOA] ligou cedo.")]
+    [InlineData("A Clara Mendes é a cuidadora.", "A [PESSOA] é a cuidadora.")]
+    public void NomeComumSemPistaNoContexto_ViraMarcador(string texto, string esperado)
+        => Assert.Equal(esperado, Sanitizar(texto));
+
+    [Theory]
+    [InlineData("Clara hipótese de sinusite bacteriana.")]
+    [InlineData("Dores nas costas e no joelho.")]
+    [InlineData("FAN e ANA não reagentes.")]
+    [InlineData("Íris sem alterações, pupilas isocóricas.")]
+    [InlineData("mariana é só uma palavra minúscula aqui.")]
+    public void PalavraQueTambemEhNome_NaoEhApagadaSozinha(string texto)
+        => Assert.Equal(texto, Sanitizar(texto));
+
+    [Fact]
+    public void TermoMarcadoPeloMedico_EhSanitizadoEmQualquerGrafia()
+    {
+        var identidade = Identidade with { TermosProtegidos = ["Escola Estadual Monteiro Lobato", "MAT-55821"] };
+
+        var resultado = _sanitizador.Sanitizar(
+            "O filho estuda na escola estadual Monteiro Lobato, matrícula MAT 55821.", identidade).Valor;
+
+        Assert.Equal("O filho estuda na [DADO_PESSOAL], matrícula [DADO_PESSOAL].", resultado);
+    }
+
     // ---------- Dano clinico: o que precisa ficar ----------
 
     [Theory]

@@ -68,4 +68,6 @@ public sealed record IdentidadeAtendimento(
     string? PacienteCpf,
     DateOnly? PacienteDataNascimento,
     string? PacienteContato,
-    string? MedicoNome);
+    string? MedicoNome,
+    /// <summary>Trechos que o medico marcou como dado pessoal neste atendimento.</summary>
+    IReadOnlyList<string>? TermosProtegidos = null);

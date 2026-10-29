@@ -26,6 +26,9 @@ public static class Marcadores
     public const string Cep = "[CEP]";
     public const string Endereco = "[ENDERECO]";
     public const string Documento = "[DOCUMENTO]";
+
+    /// <summary>Trecho que o proprio medico marcou como dado pessoal na transcricao.</summary>
+    public const string DadoPessoal = "[DADO_PESSOAL]";
 }
 
 /// <summary>
@@ -100,6 +103,14 @@ public sealed partial class SanitizadorDados : ISanitizadorDados
         }
 
         resultado = SubstituirPessoasPorContexto(resultado, contagem);
+        resultado = SubstituirNomesDoLexico(resultado, contagem);
+
+        // Por ultimo, o que o medico marcou: vale sobre qualquer texto que as
+        // camadas automaticas tenham deixado passar.
+        foreach (var termo in identidade.TermosProtegidos ?? [])
+        {
+            resultado = SubstituirTermo(resultado, termo, contagem);
+        }
 
         return new TextoSanitizado(resultado, contagem);
     }
@@ -373,7 +384,7 @@ public sealed partial class SanitizadorDados : ISanitizadorDados
 
             var primeira = palavras[i].Value;
             var aceita = quantidade >= 2
-                || (char.IsUpper(primeira[0])
+                || (ComInicialMaiuscula(primeira)
                     && !(PalavrasAmbiguas.Contains(Chave(primeira)) && InicioDeFrase(texto, palavras[i].Index)));
 
             if (aceita)
@@ -415,6 +426,135 @@ public sealed partial class SanitizadorDados : ISanitizadorDados
             Contar(contagem, Marcadores.Pessoa, 1);
             return achado.Groups["prefixo"].Value + Marcadores.Pessoa;
         });
+
+    /// <summary>
+    /// Nome de terceiro sem nenhuma pista no contexto ("a Mariana trouxe os
+    /// exames"): prenome comum com maiuscula, seguido ou nao de sobrenomes.
+    /// Prenome que tambem e palavra comum ("Clara", "Dores") so conta seguido
+    /// de outro nome.
+    /// </summary>
+    private static string SubstituirNomesDoLexico(string texto, Dictionary<string, int> contagem)
+    {
+        var palavras = Palavra().Matches(texto);
+        var trechos = new List<(int Inicio, int Fim)>();
+
+        for (var i = 0; i < palavras.Count; i++)
+        {
+            var primeira = palavras[i];
+            var chave = Chave(primeira.Value);
+
+            if (!ComInicialMaiuscula(primeira.Value) || EhMarcador(texto, primeira)
+                || !LexicoNomes.Prenomes.Contains(chave) || NaoSaoPessoa.Contains(chave))
+            {
+                continue;
+            }
+
+            var fim = i;
+            var k = i + 1;
+            while (k < palavras.Count && SoEspaco(texto, palavras[fim], palavras[k]))
+            {
+                var seguinte = palavras[k];
+                if (ComInicialMaiuscula(seguinte.Value) && EhNomeOuSobrenome(seguinte.Value))
+                {
+                    fim = k++;
+                }
+                else if (k + 1 < palavras.Count
+                    && Conectivos.Contains(Chave(seguinte.Value))
+                    && SoEspaco(texto, seguinte, palavras[k + 1])
+                    && ComInicialMaiuscula(palavras[k + 1].Value)
+                    && EhNomeOuSobrenome(palavras[k + 1].Value))
+                {
+                    fim = k + 1;
+                    k += 2;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            if (fim == i && LexicoNomes.Ambiguos.Contains(chave))
+            {
+                continue;
+            }
+
+            trechos.Add((primeira.Index, palavras[fim].Index + palavras[fim].Length));
+            i = fim;
+        }
+
+        return Trocar(texto, trechos, Marcadores.Pessoa, contagem);
+    }
+
+    /// <summary>"Mariana" sim; "ANA" (sigla de exame) e "mariana" nao.</summary>
+    private static bool ComInicialMaiuscula(string palavra)
+        => char.IsUpper(palavra[0]) && (palavra.Length == 1 || !palavra.Skip(1).All(char.IsUpper));
+
+    private static bool EhNomeOuSobrenome(string palavra)
+    {
+        var chave = Chave(palavra);
+        return LexicoNomes.Prenomes.Contains(chave) || LexicoNomes.Sobrenomes.Contains(chave);
+    }
+
+    /// <summary>
+    /// Termo marcado pelo medico: casa a mesma sequencia de palavras (letras ou
+    /// numeros), com a mesma tolerancia de grafia dos nomes do cadastro.
+    /// </summary>
+    private static string SubstituirTermo(string texto, string termo, Dictionary<string, int> contagem)
+    {
+        var alvo = PalavraOuNumero().Matches(termo).Select(p => Chave(p.Value)).ToArray();
+        if (alvo.Length == 0)
+        {
+            return texto;
+        }
+
+        var palavras = PalavraOuNumero().Matches(texto);
+        var trechos = new List<(int Inicio, int Fim)>();
+
+        for (var i = 0; i + alvo.Length <= palavras.Count; i++)
+        {
+            var casa = true;
+            for (var j = 0; j < alvo.Length && casa; j++)
+            {
+                casa = !EhMarcador(texto, palavras[i + j]) && Chave(palavras[i + j].Value) == alvo[j]
+                    && (j == 0 || SoSeparador(texto, palavras[i + j - 1], palavras[i + j]));
+            }
+
+            if (casa)
+            {
+                var ultimo = palavras[i + alvo.Length - 1];
+                trechos.Add((palavras[i].Index, ultimo.Index + ultimo.Length));
+                i += alvo.Length - 1;
+            }
+        }
+
+        return Trocar(texto, trechos, Marcadores.DadoPessoal, contagem);
+    }
+
+    private static bool SoSeparador(string texto, Match anterior, Match seguinte)
+    {
+        var inicio = anterior.Index + anterior.Length;
+        var entre = texto.AsSpan(inicio, seguinte.Index - inicio);
+        return entre.Length is > 0 and <= 3 && !entre.ContainsAny(".!?\n");
+    }
+
+    private static string Trocar(
+        string texto, List<(int Inicio, int Fim)> trechos, string marcador, Dictionary<string, int> contagem)
+    {
+        if (trechos.Count == 0)
+        {
+            return texto;
+        }
+
+        Contar(contagem, marcador, trechos.Count);
+
+        var construtor = new StringBuilder(texto);
+        foreach (var (inicio, fim) in trechos.AsEnumerable().Reverse())
+        {
+            construtor.Remove(inicio, fim - inicio).Insert(inicio, marcador);
+        }
+
+        return construtor.ToString();
+    }
 
     // ---------- Utilitarios ----------
 
@@ -517,6 +657,9 @@ public sealed partial class SanitizadorDados : ISanitizadorDados
 
     [GeneratedRegex(@"\p{L}[\p{L}\p{M}']*")]
     private static partial Regex Palavra();
+
+    [GeneratedRegex(@"[\p{L}\p{N}][\p{L}\p{M}\p{N}']*")]
+    private static partial Regex PalavraOuNumero();
 
     [GeneratedRegex(@"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")]
     private static partial Regex EmailRegex();
