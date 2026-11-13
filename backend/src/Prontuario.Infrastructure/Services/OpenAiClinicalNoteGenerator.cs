@@ -1,8 +1,5 @@
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Microsoft.Extensions.Logging;
 using Prontuario.Application.Common.Interfaces;
 using Prontuario.Application.Common.Models;
 using Prontuario.Application.Privacidade;
@@ -137,14 +134,9 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
 
     private static readonly JsonSerializerOptions OpcoesJson = new(JsonSerializerDefaults.Web);
 
-    private readonly IHttpClientFactory _fabrica;
-    private readonly ILogger<OpenAiClinicalNoteGenerator> _logger;
+    private readonly OpenAiChat _chat;
 
-    public OpenAiClinicalNoteGenerator(IHttpClientFactory fabrica, ILogger<OpenAiClinicalNoteGenerator> logger)
-    {
-        _fabrica = fabrica;
-        _logger = logger;
-    }
+    public OpenAiClinicalNoteGenerator(OpenAiChat chat) => _chat = chat;
 
     public async Task<RascunhoComOrigensDto> GerarRascunhoAsync(
         TextoSanitizado transcricao,
@@ -260,65 +252,22 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
         return string.Join("\n\n", partes);
     }
 
-    /// <summary>
-    /// Envia a requisicao e devolve o texto da resposta. O consumo de tokens vai
-    /// para o log (so numeros, nunca conteudo): e o que permite medir o custo
-    /// real por consulta.
-    /// </summary>
-    private async Task<string?> ChamarAsync(
+    private Task<string?> ChamarAsync(
         object payload, CredenciaisIA credenciais, string operacao, CancellationToken cancellationToken)
-    {
-        using var requisicao = new HttpRequestMessage(HttpMethod.Post, "chat/completions")
-        {
-            Content = JsonContent.Create(payload),
-        };
-        requisicao.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credenciais.ChaveApi);
-
-        var cliente = _fabrica.CreateClient(OpenAiCliente.Nome);
-        using var resposta = await cliente.SendAsync(requisicao, cancellationToken);
-        var corpo = await resposta.Content.ReadAsStringAsync(cancellationToken);
-
-        if (!resposta.IsSuccessStatusCode)
-        {
-            throw new InvalidOperationException(
-                $"A API de texto respondeu {(int)resposta.StatusCode}: {OpenAiCliente.DescreverErro(corpo)}");
-        }
-
-        using var json = JsonDocument.Parse(corpo);
-        RegistrarConsumo(json.RootElement, credenciais.ModeloTexto, operacao);
-
-        return json.RootElement
-            .GetProperty("choices")[0]
-            .GetProperty("message")
-            .GetProperty("content")
-            .GetString();
-    }
-
-    private void RegistrarConsumo(JsonElement raiz, string modelo, string operacao)
-    {
-        if (!raiz.TryGetProperty("usage", out var uso) || uso.ValueKind != JsonValueKind.Object)
-        {
-            return;
-        }
-
-        static int Numero(JsonElement objeto, string nome)
-            => objeto.ValueKind == JsonValueKind.Object && objeto.TryGetProperty(nome, out var valor)
-                && valor.ValueKind == JsonValueKind.Number && valor.TryGetInt32(out var numero) ? numero : 0;
-
-        var emCache = uso.TryGetProperty("prompt_tokens_details", out var detalhes) ? Numero(detalhes, "cached_tokens") : 0;
-
-        _logger.LogInformation(
-            "Consumo de IA ({Operacao}, {Modelo}): {Entrada} tokens de entrada ({EmCache} em cache), {Saida} de saida.",
-            operacao, modelo, Numero(uso, "prompt_tokens"), emCache, Numero(uso, "completion_tokens"));
-    }
+        => _chat.EnviarAsync(payload, credenciais, operacao, cancellationToken);
 
     /// <summary>Falante por trecho; entrada fora do formato e ignorada.</summary>
     internal static IReadOnlyDictionary<int, string> LerFalantes(string conteudo)
     {
         using var json = JsonDocument.Parse(conteudo);
+        return LerFalantes(json.RootElement);
+    }
+
+    internal static IReadOnlyDictionary<int, string> LerFalantes(JsonElement raiz)
+    {
         var resultado = new Dictionary<int, string>();
 
-        if (!json.RootElement.TryGetProperty("falantes", out var falantes) || falantes.ValueKind != JsonValueKind.Array)
+        if (!raiz.TryGetProperty("falantes", out var falantes) || falantes.ValueKind != JsonValueKind.Array)
         {
             return resultado;
         }

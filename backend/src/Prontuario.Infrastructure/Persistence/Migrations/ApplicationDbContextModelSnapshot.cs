@@ -319,6 +319,53 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                     b.ToTable("Pacientes");
                 });
 
+            modelBuilder.Entity("Prontuario.Domain.Entities.ProntuarioOcupacional", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AtendimentoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("AuscultaCardiaca")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("AuscultaPulmonar")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("ConcluidoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("JustificativasJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Modo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("RespostasJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Sexo")
+                        .IsRequired()
+                        .HasMaxLength(1)
+                        .HasColumnType("character varying(1)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AtendimentoId")
+                        .IsUnique();
+
+                    b.ToTable("ProntuariosOcupacionais");
+                });
+
             modelBuilder.Entity("Prontuario.Domain.Entities.ProntuarioRegistro", b =>
                 {
                     b.Property<Guid>("Id")
@@ -686,6 +733,17 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                     b.Navigation("Clinica");
                 });
 
+            modelBuilder.Entity("Prontuario.Domain.Entities.ProntuarioOcupacional", b =>
+                {
+                    b.HasOne("Prontuario.Domain.Entities.Atendimento", "Atendimento")
+                        .WithOne("Ocupacional")
+                        .HasForeignKey("Prontuario.Domain.Entities.ProntuarioOcupacional", "AtendimentoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Atendimento");
+                });
+
             modelBuilder.Entity("Prontuario.Domain.Entities.ProntuarioRegistro", b =>
                 {
                     b.HasOne("Prontuario.Domain.Entities.Atendimento", "Atendimento")
@@ -769,6 +827,8 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                     b.Navigation("LogsAuditoria");
 
                     b.Navigation("NotaExportavel");
+
+                    b.Navigation("Ocupacional");
 
                     b.Navigation("Prontuario");
 

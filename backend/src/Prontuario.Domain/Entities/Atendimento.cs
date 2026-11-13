@@ -34,6 +34,9 @@ public class Atendimento : BaseEntity
     public SessaoTranscricao? SessaoTranscricao { get; set; }
     public ProntuarioRegistro? Prontuario { get; set; }
     public NotaExportavel? NotaExportavel { get; set; }
+
+    /// <summary>Presente quando o atendimento e um exame ocupacional.</summary>
+    public ProntuarioOcupacional? Ocupacional { get; set; }
     public ICollection<LogAuditoria> LogsAuditoria { get; set; } = new List<LogAuditoria>();
     public ICollection<DocumentoClinico> Documentos { get; set; } = new List<DocumentoClinico>();
 }
