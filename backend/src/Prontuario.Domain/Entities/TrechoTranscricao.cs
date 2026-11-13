@@ -23,6 +23,12 @@ public class TrechoTranscricao : BaseEntity
     /// </summary>
     public bool ReconhecimentoAplicado { get; set; }
 
+    /// <summary>
+    /// A IA ja considerou este trecho ao preencher o rascunho. Durante a
+    /// consulta so os trechos ainda nao considerados sao enviados a ela.
+    /// </summary>
+    public bool ConsideradoNoRascunho { get; set; }
+
     /// <summary>Quem disse o trecho, segundo a IA ou o medico.</summary>
     public Falante Falante { get; set; } = Falante.Indefinido;
 

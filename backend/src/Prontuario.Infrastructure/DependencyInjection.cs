@@ -38,7 +38,9 @@ public static class DependencyInjection
 
         services.AddHttpClient(OpenAiCliente.Nome, cliente =>
         {
-            cliente.BaseAddress = new Uri(OpenAiCliente.BaseUrl);
+            // Outro endereco so para gateway compativel ou ambiente de teste.
+            var endereco = configuration["OpenAi:BaseUrl"];
+            cliente.BaseAddress = new Uri(string.IsNullOrWhiteSpace(endereco) ? OpenAiCliente.BaseUrl : endereco.TrimEnd('/') + "/");
             // O rascunho e refeito durante a consulta, com o medico esperando:
             // uma chamada presa nao pode segurar a tela.
             cliente.Timeout = TimeSpan.FromSeconds(90);
@@ -67,7 +69,10 @@ public static class DependencyInjection
         services.Configure<TranscricaoOptions>(configuration.GetSection(TranscricaoOptions.SectionName));
         services.AddScoped<ITranscriptionService, OpenAiTranscriptionService>();
         services.AddScoped<IProvedorTranscricaoTempoReal, OpenAiTranscricaoTempoReal>();
+        services.AddScoped<OpenAiChat>();
         services.AddScoped<IClinicalNoteGenerator, OpenAiClinicalNoteGenerator>();
+        services.AddScoped<IExtratorOcupacional, OpenAiExtratorOcupacional>();
+        services.AddScoped<IProntuarioOcupacionalService, ProntuarioOcupacionalService>();
         services.AddScoped<ITranscricaoConsultaService, TranscricaoConsultaService>();
 
         services.AddSingleton<INotaClinicaFormatter, NotaClinicaFormatter>();

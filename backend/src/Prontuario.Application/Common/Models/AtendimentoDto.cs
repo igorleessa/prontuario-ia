@@ -8,7 +8,11 @@ public sealed record AtendimentoResumoDto(
     string MedicoNome,
     DateTime DataHora,
     string Status,
-    bool ConsentimentoTranscricao);
+    bool ConsentimentoTranscricao)
+{
+    /// <summary>Exame ocupacional: abre no prontuario das 9 secoes, e nao na nota clinica.</summary>
+    public bool Ocupacional { get; init; }
+}
 
 /// <summary>
 /// Atendimento aberto na tela de acompanhamento. <paramref name="Rascunho"/> traz o
@@ -47,7 +51,11 @@ public sealed record AtendimentoDetalheDto(
     /// <summary>Trechos da transcricao, para exibicao, com a sequencia citada pelas origens.</summary>
     IReadOnlyList<TrechoRegistradoDto> Trechos,
     /// <summary>De quais trechos a IA tirou cada campo do rascunho.</summary>
-    IReadOnlyDictionary<string, IReadOnlyList<int>> OrigensIA);
+    IReadOnlyDictionary<string, IReadOnlyList<int>> OrigensIA)
+{
+    /// <summary>Exame ocupacional: abre no prontuario das 9 secoes, e nao na nota clinica.</summary>
+    public bool Ocupacional { get; init; }
+}
 
 /// <summary>
 /// Numeros da clinica para a tela de atendimentos. O tempo economizado e uma

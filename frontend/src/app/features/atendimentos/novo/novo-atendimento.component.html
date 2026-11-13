@@ -120,17 +120,52 @@
         }
 
         <div class="campo">
-          <label class="campo__rotulo" for="modelo"><app-icone nome="estetoscopio" [tamanho]="15" /> Modelo da nota</label>
-          <select id="modelo" [ngModel]="modeloEscolhido()" (ngModelChange)="modeloEscolhido.set($event)">
-            <option value="">Consulta geral (padrão)</option>
-            @for (modelo of modelos(); track modelo.id) {
-              <option [value]="modelo.id">{{ modelo.nome }}</option>
-            }
-          </select>
-          <span class="campo__dica">
-            Orienta a IA sobre o que destacar — uma nota de cardiologia não é igual a uma de pediatria.
-          </span>
+          <span class="campo__rotulo" id="tipo-rotulo"><app-icone nome="prontuario" [tamanho]="15" /> Tipo de atendimento</span>
+          <div class="abas" role="group" aria-labelledby="tipo-rotulo">
+            <button type="button" class="abas__item" [class.abas__item--ativa]="tipo() === 'clinica'"
+                    [attr.aria-pressed]="tipo() === 'clinica'" (click)="tipo.set('clinica')">Consulta clínica</button>
+            <button type="button" class="abas__item" [class.abas__item--ativa]="tipo() === 'ocupacional'"
+                    [attr.aria-pressed]="tipo() === 'ocupacional'" (click)="tipo.set('ocupacional')">Exame ocupacional</button>
+          </div>
         </div>
+
+        @if (tipo() === 'clinica') {
+          <div class="campo">
+            <label class="campo__rotulo" for="modelo"><app-icone nome="estetoscopio" [tamanho]="15" /> Modelo da nota</label>
+            <select id="modelo" [ngModel]="modeloEscolhido()" (ngModelChange)="modeloEscolhido.set($event)">
+              <option value="">Consulta geral (padrão)</option>
+              @for (modelo of modelos(); track modelo.id) {
+                <option [value]="modelo.id">{{ modelo.nome }}</option>
+              }
+            </select>
+            <span class="campo__dica">
+              Orienta a IA sobre o que destacar — uma nota de cardiologia não é igual a uma de pediatria.
+            </span>
+          </div>
+        } @else {
+          <div class="campo">
+            <span class="campo__rotulo" id="forma-rotulo">Como você quer conduzir o exame?</span>
+            <div class="formas" role="group" aria-labelledby="forma-rotulo">
+              @for (forma of formas; track forma.modo) {
+                <button type="button" class="forma" [class.forma--escolhida]="modoOcupacional() === forma.modo"
+                        [attr.aria-pressed]="modoOcupacional() === forma.modo" (click)="modoOcupacional.set(forma.modo)">
+                  <strong>{{ forma.titulo }}</strong>
+                  <small>{{ forma.descricao }}</small>
+                </button>
+              }
+            </div>
+          </div>
+
+          <div class="campo">
+            <label class="campo__rotulo" for="sexo">Sexo do paciente</label>
+            <select id="sexo" [ngModel]="sexo()" (ngModelChange)="sexo.set($event)">
+              <option value="">Selecione uma opção</option>
+              <option value="F">Feminino</option>
+              <option value="M">Masculino</option>
+            </select>
+            <span class="campo__dica">Define a seção de saúde da mulher ou do homem.</span>
+          </div>
+        }
 
         <ul class="resumo__garantias">
           <li><app-icone nome="microfone-desligado" [tamanho]="15" /> Sem gravação de áudio</li>
@@ -138,10 +173,10 @@
           <li><app-icone nome="caneta" [tamanho]="15" /> Você revisa antes de assinar</li>
         </ul>
 
-        <button type="button" class="botao botao--grande botao--bloco" [disabled]="!selecionado() || abrindo()"
+        <button type="button" class="botao botao--grande botao--bloco" [disabled]="!podeAbrir()"
                 (click)="abrirAtendimento()">
           @if (abrindo()) { <span class="giro"></span> Abrindo… }
-          @else { Abrir consulta <app-icone nome="avancar" /> }
+          @else { {{ tipo() === 'ocupacional' ? 'Iniciar exame' : 'Abrir consulta' }} <app-icone nome="avancar" /> }
         </button>
       </div>
     </aside>

@@ -26,13 +26,13 @@ public interface ITranscricaoConsultaService
         Guid atendimentoId, Guid clinicaId, int sequencia, Stream audio, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Refaz o rascunho do prontuario sobre tudo o que foi dito ate agora. Usado
-    /// durante a consulta (preenchimento progressivo), ao encerrar e para tentar
-    /// de novo quando a IA falhou.
+    /// Atualiza o rascunho do prontuario. Durante a consulta e incremental: so
+    /// as falas novas vao a IA, junto do rascunho atual, e ela devolve o que
+    /// mudou. A passada final rele a consulta inteira.
     /// </summary>
     /// <param name="final">
-    /// Passada final (encerramento, "refazer rascunho"): usa o modelo completo.
-    /// Durante a consulta, o modelo rapido.
+    /// Passada final (encerramento, "refazer rascunho"): consulta inteira, modelo
+    /// completo. Durante a consulta, so as falas novas, modelo rapido.
     /// </param>
     Task<ResultadoOperacao<RascunhoComOrigensDto>> GerarRascunhoAsync(
         Guid atendimentoId, Guid clinicaId, bool final = false, CancellationToken cancellationToken = default);

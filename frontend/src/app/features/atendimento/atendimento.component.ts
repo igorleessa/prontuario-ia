@@ -325,6 +325,12 @@ export class AtendimentoComponent {
 
     this.atendimentos.obter(id).subscribe({
       next: (detalhe) => {
+        // Exame ocupacional tem tela propria, com as 9 secoes.
+        if (detalhe.ocupacional) {
+          void this.router.navigate(['/atendimentos', id, 'ocupacional'], { replaceUrl: true });
+          return;
+        }
+
         this.atendimento.set(detalhe);
         this.sugestaoIa.set(detalhe.sugestaoIa);
         this.erroIA.set(detalhe.erroProcessamentoIA);

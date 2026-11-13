@@ -20,6 +20,19 @@ public class TranscricaoOptions
     /// em que o WebRTC com o provedor e bloqueado.
     /// </summary>
     public bool TempoRealHabilitado { get; set; } = true;
+
+    /// <summary>
+    /// Durante a consulta, mandar a IA so as falas novas (com o rascunho atual)
+    /// em vez da conversa inteira a cada atualizacao. Desligar volta ao
+    /// comportamento anterior, mais caro.
+    /// </summary>
+    public bool RascunhoIncremental { get; set; } = true;
+
+    /// <summary>
+    /// Quantas falas ja consideradas acompanham as novas, para a IA interpretar
+    /// respostas curtas ("sim", "faz tempo") pela pergunta que veio antes.
+    /// </summary>
+    public int FalasDeContexto { get; set; } = 6;
 }
 
 /// <summary>
@@ -237,6 +250,13 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
             return ResultadoOperacao<RascunhoComOrigensDto>.Falha(ProtecaoIndisponivel);
         }
 
+        // Durante a consulta so as falas novas vao a IA. A passada final, e a
+        // transcricao do fluxo antigo (sem trechos), seguem pela consulta inteira.
+        if (!final && _opcoes.RascunhoIncremental && transcricao.Trechos.Count > 0)
+        {
+            return await AtualizarRascunhoAsync(atendimento, transcricao, credenciais, identidade, cancellationToken);
+        }
+
         // Cada trecho vai numerado pela sua sequencia, para a IA citar de onde
         // tirou cada campo. O texto guardado ja esta sanitizado; passar de novo
         // e defesa em profundidade e o que produz o tipo que o gerador exige.
@@ -253,13 +273,9 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
             gerado = await _llm.GerarRascunhoAsync(
                 sanitizado, credenciais with { ModeloTexto = modelo }, contexto, cancellationToken);
         }
-        catch (Exception excecao) when (excecao is HttpRequestException or InvalidOperationException or TaskCanceledException or System.Text.Json.JsonException)
+        catch (Exception excecao) when (FalhaDoProvedor(excecao))
         {
-            _logger.LogWarning(excecao, "Falha ao gerar o rascunho do atendimento {AtendimentoId}.", atendimentoId);
-            atendimento.ErroProcessamentoIA = excecao.Message.Length > 500 ? excecao.Message[..500] : excecao.Message;
-            transcricao.Status = StatusProcessamento.Falhou;
-            await _db.SaveChangesAsync(cancellationToken);
-            return ResultadoOperacao<RascunhoComOrigensDto>.Falha(atendimento.ErroProcessamentoIA);
+            return await RegistrarFalhaAsync(atendimento, transcricao, excecao, cancellationToken);
         }
 
         VerificarSaida(gerado.Rascunho, identidade, atendimentoId);
@@ -285,6 +301,12 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
         registro.OrigensJson = JsonSerializer.Serialize(origens);
         AplicarFalantes(transcricao, gerado.Falantes);
 
+        // A consulta inteira foi lida: a proxima atualizacao parte daqui.
+        foreach (var trecho in transcricao.Trechos)
+        {
+            trecho.ConsideradoNoRascunho = true;
+        }
+
         transcricao.Status = StatusProcessamento.Concluido;
         atendimento.ErroProcessamentoIA = null;
         await _db.SaveChangesAsync(cancellationToken);
@@ -296,6 +318,187 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
         return ResultadoOperacao<RascunhoComOrigensDto>.Ok(
             new RascunhoComOrigensDto(rascunho, origens, FalantesAtuais(transcricao)));
     }
+
+    /// <summary>
+    /// Atualizacao durante a consulta. A IA recebe o rascunho atual, as ultimas
+    /// falas ja consideradas e as novas, e devolve so o que mudou: o tamanho da
+    /// chamada acompanha a fala nova, e nao a duracao da consulta.
+    /// </summary>
+    private async Task<ResultadoOperacao<RascunhoComOrigensDto>> AtualizarRascunhoAsync(
+        Atendimento atendimento,
+        Transcricao transcricao,
+        CredenciaisIA credenciais,
+        IdentidadeAtendimento identidade,
+        CancellationToken cancellationToken)
+    {
+        var registro = await _db.RascunhosIA
+            .SingleOrDefaultAsync(r => r.TranscricaoId == transcricao.Id, cancellationToken);
+
+        var novas = transcricao.Trechos
+            .Where(t => !t.ConsideradoNoRascunho && t.Texto.Length > 0)
+            .OrderBy(t => t.Sequencia)
+            .ToList();
+
+        // Sem fala nova, ou so com confirmacoes e cumprimentos, nao ha o que
+        // preencher: nenhuma chamada. As falas ficam para o proximo lote.
+        if (novas.Count == 0 || !TriagemDeFalas.TemConteudo(novas.Select(t => t.Texto)))
+        {
+            return ResultadoOperacao<RascunhoComOrigensDto>.Ok(new RascunhoComOrigensDto(
+                ParaDto(registro), FiltrarOrigens(LerOrigens(registro), ParaDto(registro), transcricao),
+                FalantesAtuais(transcricao)));
+        }
+
+        var contexto = transcricao.Trechos
+            .Where(t => t.ConsideradoNoRascunho && t.Texto.Length > 0)
+            .OrderByDescending(t => t.Sequencia)
+            .Take(Math.Max(0, _opcoes.FalasDeContexto))
+            .ToList();
+
+        // O rascunho guardado tem o nome do paciente de volta (e o que o medico
+        // ve): antes de retornar a IA, passa de novo por toda a protecao.
+        RegistroSanitizado atual;
+        try
+        {
+            atual = await _sanitizador.SanitizarRegistroAsync(ParaDto(registro), identidade, cancellationToken);
+        }
+        catch (ProtecaoIndisponivelException excecao)
+        {
+            _logger.LogWarning(excecao, "Rascunho do atendimento {AtendimentoId} adiado: protecao incompleta.", atendimento.Id);
+            return ResultadoOperacao<RascunhoComOrigensDto>.Falha(ProtecaoIndisponivel);
+        }
+
+        var falasDeContexto = _sanitizador.Sanitizar(TextoDaConsulta.Numerado(contexto, rotularTodos: true), identidade);
+        var falasNovas = _sanitizador.Sanitizar(TextoDaConsulta.Numerado(novas, rotularTodos: false), identidade);
+        var modelo = credenciais.ModeloTextoAoVivo ?? credenciais.ModeloTexto;
+
+        AtualizacaoRascunhoDto atualizacao;
+        try
+        {
+            atualizacao = await _llm.AtualizarRascunhoAsync(
+                atual, registro?.Cid10Sugerido, falasDeContexto, falasNovas,
+                credenciais with { ModeloTexto = modelo },
+                new ContextoGeracao(atendimento.TemplateNota?.Instrucoes, atendimento.Medico!.InstrucoesEstilo),
+                cancellationToken);
+        }
+        catch (Exception excecao) when (FalhaDoProvedor(excecao))
+        {
+            return await RegistrarFalhaAsync(atendimento, transcricao, excecao, cancellationToken);
+        }
+
+        VerificarSaida(atualizacao.Alteracoes, identidade, atendimento.Id);
+        var alteracoes = Reidentificar(atualizacao.Alteracoes, identidade);
+
+        if (registro is null)
+        {
+            registro = new RascunhoIA { TranscricaoId = transcricao.Id };
+            _db.RascunhosIA.Add(registro);
+        }
+
+        // Campo nulo na resposta e campo que nao mudou: fica como estava.
+        var origens = LerOrigens(registro);
+        registro.QueixaPrincipal = alteracoes.QueixaPrincipal ?? registro.QueixaPrincipal;
+        registro.Hda = alteracoes.Hda ?? registro.Hda;
+        registro.Antecedentes = alteracoes.Antecedentes ?? registro.Antecedentes;
+        registro.ExameFisico = alteracoes.ExameFisico ?? registro.ExameFisico;
+        registro.HipoteseDiagnostica = alteracoes.HipoteseDiagnostica ?? registro.HipoteseDiagnostica;
+        registro.Cid10Sugerido = alteracoes.Cid10Sugerido ?? registro.Cid10Sugerido;
+        registro.Conduta = alteracoes.Conduta ?? registro.Conduta;
+
+        // A origem de um campo alterado soma as falas citadas agora as que ja o
+        // sustentavam. So vale citacao de fala que a IA de fato recebeu.
+        var enviadas = novas.Concat(contexto).Select(t => t.Sequencia).ToHashSet();
+        foreach (var (campo, valor) in PorCampo(alteracoes))
+        {
+            if (valor is null || !atualizacao.Origens.TryGetValue(campo, out var citadas))
+            {
+                continue;
+            }
+
+            origens[campo] = origens.GetValueOrDefault(campo, [])
+                .Concat(citadas.Where(enviadas.Contains))
+                .Distinct()
+                .Order()
+                .ToList();
+        }
+
+        var rascunho = ParaDto(registro);
+        var origensValidas = FiltrarOrigens(origens, rascunho, transcricao);
+        registro.OrigensJson = JsonSerializer.Serialize(origensValidas);
+
+        var sequenciasNovas = novas.Select(t => t.Sequencia).ToHashSet();
+        AplicarFalantes(
+            transcricao,
+            atualizacao.Falantes?.Where(par => sequenciasNovas.Contains(par.Key)).ToDictionary(par => par.Key, par => par.Value));
+
+        // So o que foi enviado: fala que chegou durante a chamada vai na proxima.
+        foreach (var trecho in novas)
+        {
+            trecho.ConsideradoNoRascunho = true;
+        }
+
+        transcricao.Status = StatusProcessamento.Concluido;
+        atendimento.ErroProcessamentoIA = null;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        await _auditoria.RegistrarAsync(
+            AcoesAuditoria.RascunhoGerado, atendimento.Id,
+            $"atualizacao com {novas.Count} falas novas, {falasNovas.TotalSubstituicoes} dados protegidos",
+            cancellationToken);
+
+        return ResultadoOperacao<RascunhoComOrigensDto>.Ok(
+            new RascunhoComOrigensDto(rascunho, origensValidas, FalantesAtuais(transcricao)));
+    }
+
+    private static bool FalhaDoProvedor(Exception excecao)
+        => excecao is HttpRequestException or InvalidOperationException or TaskCanceledException or JsonException;
+
+    private async Task<ResultadoOperacao<RascunhoComOrigensDto>> RegistrarFalhaAsync(
+        Atendimento atendimento, Transcricao transcricao, Exception excecao, CancellationToken cancellationToken)
+    {
+        _logger.LogWarning(excecao, "Falha ao gerar o rascunho do atendimento {AtendimentoId}.", atendimento.Id);
+        atendimento.ErroProcessamentoIA = excecao.Message.Length > 500 ? excecao.Message[..500] : excecao.Message;
+        transcricao.Status = StatusProcessamento.Falhou;
+        await _db.SaveChangesAsync(cancellationToken);
+        return ResultadoOperacao<RascunhoComOrigensDto>.Falha(atendimento.ErroProcessamentoIA);
+    }
+
+    private static RascunhoClinicoDto ParaDto(RascunhoIA? registro) => new(
+        registro?.QueixaPrincipal,
+        registro?.Hda,
+        registro?.Antecedentes,
+        registro?.ExameFisico,
+        registro?.HipoteseDiagnostica,
+        registro?.Cid10Sugerido,
+        registro?.Conduta);
+
+    private static Dictionary<string, IReadOnlyList<int>> LerOrigens(RascunhoIA? registro)
+    {
+        if (string.IsNullOrWhiteSpace(registro?.OrigensJson))
+        {
+            return [];
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<Dictionary<string, List<int>>>(registro.OrigensJson)?
+                .ToDictionary(par => par.Key, par => (IReadOnlyList<int>)par.Value) ?? [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
+    private static Dictionary<string, string?> PorCampo(RascunhoClinicoDto rascunho) => new()
+    {
+        ["queixaPrincipal"] = rascunho.QueixaPrincipal,
+        ["hda"] = rascunho.Hda,
+        ["antecedentes"] = rascunho.Antecedentes,
+        ["exameFisico"] = rascunho.ExameFisico,
+        ["hipoteseDiagnostica"] = rascunho.HipoteseDiagnostica,
+        ["cid10Sugerido"] = rascunho.Cid10Sugerido,
+        ["conduta"] = rascunho.Conduta,
+    };
 
     private static string TextoNumerado(Transcricao transcricao) => TextoDaConsulta.Numerado(transcricao);
 
@@ -335,16 +538,7 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
         IReadOnlyDictionary<string, IReadOnlyList<int>> origens, RascunhoClinicoDto rascunho, Transcricao transcricao)
     {
         var existentes = transcricao.Trechos.Select(t => t.Sequencia).ToHashSet();
-        var preenchidos = new Dictionary<string, string?>
-        {
-            ["queixaPrincipal"] = rascunho.QueixaPrincipal,
-            ["hda"] = rascunho.Hda,
-            ["antecedentes"] = rascunho.Antecedentes,
-            ["exameFisico"] = rascunho.ExameFisico,
-            ["hipoteseDiagnostica"] = rascunho.HipoteseDiagnostica,
-            ["cid10Sugerido"] = rascunho.Cid10Sugerido,
-            ["conduta"] = rascunho.Conduta,
-        };
+        var preenchidos = PorCampo(rascunho);
 
         return origens
             .Where(par => preenchidos.TryGetValue(par.Key, out var valor) && !string.IsNullOrWhiteSpace(valor))
@@ -512,6 +706,9 @@ public class TranscricaoConsultaService : ITranscricaoConsultaService
         }
         else
         {
+            // Reenvio do mesmo trecho (rede instavel) nao o devolve a IA; texto
+            // diferente, sim.
+            existente.ConsideradoNoRascunho &= existente.Texto == sanitizado.Valor;
             existente.Texto = sanitizado.Valor;
             existente.ReconhecimentoAplicado = reconhecido;
         }

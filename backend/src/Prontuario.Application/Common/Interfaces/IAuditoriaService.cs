@@ -40,5 +40,8 @@ public static class AcoesAuditoria
     public const string NotaBaixadaPdf = "nota.pdf";
     public const string DocumentoGerado = "documento.gerado";
     public const string DocumentoRevisado = "documento.revisado";
+    public const string OcupacionalIniciado = "ocupacional.iniciado";
+    public const string OcupacionalFalasProcessadas = "ocupacional.falas";
+    public const string OcupacionalConcluido = "ocupacional.concluido";
     public const string ConfiguracaoAlterada = "configuracao.alterada";
 }

@@ -27,9 +27,17 @@ dos campos → revisão) atende dois modelos de negócio, escolhidos por configu
   da OpenAI (WebRTC, com chave temporária emitida pelo backend), e o áudio nunca
   passa pelo servidor nem é guardado. Se o tempo real não estiver disponível, a
   escuta segue por trechos de poucos segundos, transcritos em memória e descartados.
-- **Prontuário preenchido durante a consulta**: o rascunho é refeito conforme a
-  fala chega, e os campos se preenchem na tela. O que o médico edita nunca é
-  sobrescrito — a novidade da IA aparece como sugestão para aceitar ou não.
+- **Prontuário preenchido durante a consulta**: conforme a fala chega, os campos
+  se preenchem na tela. O que o médico edita nunca é sobrescrito — a novidade da
+  IA aparece como sugestão para aceitar ou não.
+- **Atualização incremental, para custar pouco**: durante a consulta a IA não
+  relê a conversa inteira. Recebe o rascunho atual, as últimas falas (contexto)
+  e só as falas novas, e devolve apenas os campos que mudaram. O tamanho de cada
+  chamada acompanha a fala nova, e não a duração da consulta. Falas que são só
+  confirmação ou cumprimento ("uhum", "bom dia") não geram chamada: esperam a
+  próxima fala com conteúdo. O consumo de tokens de cada chamada vai para o log
+  (só números), para medir o custo real por consulta. `Transcricao__RascunhoIncremental=false`
+  volta ao comportamento anterior.
 - **Origem de cada campo**: a IA indica de quais falas tirou o conteúdo, e o
   médico vê esses trechos destacados na transcrição com um clique. Citação para
   trecho que não existe é descartada.
@@ -38,8 +46,9 @@ dos campos → revisão) atende dois modelos de negócio, escolhidos por configu
   atribui cada trecho pelo conteúdo, na mesma chamada que preenche o prontuário.
   O médico corrige com um clique, e a correção dele vale sobre a da IA e volta
   para ela nas chamadas seguintes e na redação dos documentos.
-- **Dois modelos**: um rápido e barato refaz o rascunho durante a consulta
-  (padrão `gpt-4o-mini`); o completo faz a passada final ao encerrar.
+- **Dois modelos**: um rápido e barato atualiza o rascunho durante a consulta
+  (padrão `gpt-4o-mini`); o completo relê a consulta inteira uma única vez, na
+  passada final ao encerrar, e corrige o que as atualizações tenham deixado passar.
 - Tela de revisão campo a campo, com etiqueta no que veio da IA e no que o médico
   alterou, e comparação com a sugestão original.
 - Modelos de nota por especialidade (clínica geral, cardiologia, pediatria,
@@ -48,6 +57,26 @@ dos campos → revisão) atende dois modelos de negócio, escolhidos por configu
   mesma consulta, editáveis e exportáveis em PDF.
 - Falha da IA não bloqueia nada: o formulário continua preenchível à mão, e o
   rascunho pode ser refeito sobre a transcrição sem duplicar o atendimento.
+
+**Exame ocupacional (prontuário de 9 seções)**
+- Escolhido em "Nova consulta", em três formas: **forma atual** (o médico preenche,
+  sem IA), **IA guiada** (seção a seção) e **Modo Escriba** (conversa livre, a IA
+  distribui cada resposta na seção certa).
+- Os campos, as opções e os condicionais são dados (`EsquemaOcupacional`); checklist
+  de obrigatórios, alertas de consistência (bloqueiam salvar até corrigir ou
+  justificar) e comparação com o exame anterior são regras puras, sem IA.
+- **A conversa não é guardada.** O navegador manda só as falas novas, com as últimas
+  como contexto; o servidor sanitiza, chama a IA e esquece o texto. No banco ficam
+  as respostas, a origem de cada uma (IA ou médico) e se a ausculta foi identificada.
+- **Custo baixo por desenho:** instrução e esquema vão fixos na mensagem de sistema
+  (o provedor cobra menos pelo prefixo repetido), a resposta traz só o que mudou, e
+  lote só de confirmações ("uhum", "bom dia") não gera chamada.
+- A IA só sugere: valor fora das opções, condicional não liberado ou campo que não
+  aceita voz (token, ASO) é descartado, e resposta do médico nunca é sobrescrita.
+- Com o modo demonstração ligado, "Simular conversa" envia uma conversa fictícia no
+  lugar do microfone.
+- Ainda fora: Parecer Clínico, Meu Check-up/HRA, envio ao colaborador, NPS, Gestão
+  Médica e a separação de vozes pelo áudio.
 
 **Privacidade: sanitização antes da IA**
 - Camada local (sem nenhum serviço externo) entre a transcrição e todo o resto:

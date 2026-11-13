@@ -78,7 +78,7 @@ public class AtendimentoService : IAtendimentoService
                 a.Medico!.Nome,
                 a.DataHora,
                 a.Status.ToString(),
-                a.ConsentimentoTranscricao))
+                a.ConsentimentoTranscricao) { Ocupacional = a.Ocupacional != null })
             .ToListAsync(cancellationToken);
 
     public async Task<AtendimentoDetalheDto?> ObterAsync(Guid atendimentoId, Guid clinicaId, CancellationToken cancellationToken = default)
@@ -121,7 +121,10 @@ public class AtendimentoService : IAtendimentoService
             transcricao is null ? 0 : IdentidadeDoAtendimento.ContarMarcadores(transcricao),
             atendimento.PacienteRef.Contato,
             await ObterTrechosAsync(atendimento.Id, identidade, cancellationToken),
-            await ObterOrigensIAAsync(atendimento.Id, cancellationToken));
+            await ObterOrigensIAAsync(atendimento.Id, cancellationToken))
+        {
+            Ocupacional = await _db.ProntuariosOcupacionais.AnyAsync(o => o.AtendimentoId == atendimento.Id, cancellationToken),
+        };
     }
 
     /// <summary>Trechos com a sequencia real, que e o que as origens da IA citam.</summary>

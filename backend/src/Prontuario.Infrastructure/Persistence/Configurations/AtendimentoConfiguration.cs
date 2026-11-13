@@ -31,5 +31,19 @@ public class AtendimentoConfiguration : IEntityTypeConfiguration<Atendimento>
         builder.HasOne(a => a.NotaExportavel)
             .WithOne(n => n.Atendimento)
             .HasForeignKey<NotaExportavel>(n => n.AtendimentoId);
+
+        builder.HasOne(a => a.Ocupacional)
+            .WithOne(o => o.Atendimento)
+            .HasForeignKey<ProntuarioOcupacional>(o => o.AtendimentoId);
+    }
+}
+
+public class ProntuarioOcupacionalConfiguration : IEntityTypeConfiguration<ProntuarioOcupacional>
+{
+    public void Configure(EntityTypeBuilder<ProntuarioOcupacional> builder)
+    {
+        builder.Property(o => o.Modo).HasMaxLength(20);
+        builder.Property(o => o.Sexo).HasMaxLength(1);
+        builder.HasIndex(o => o.AtendimentoId).IsUnique();
     }
 }

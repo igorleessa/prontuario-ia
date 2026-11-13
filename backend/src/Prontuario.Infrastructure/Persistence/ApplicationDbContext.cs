@@ -23,6 +23,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<ConfiguracaoIA> ConfiguracoesIA => Set<ConfiguracaoIA>();
     public DbSet<TemplateNota> TemplatesNota => Set<TemplateNota>();
     public DbSet<DocumentoClinico> Documentos => Set<DocumentoClinico>();
+    public DbSet<ProntuarioOcupacional> ProntuariosOcupacionais => Set<ProntuarioOcupacional>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

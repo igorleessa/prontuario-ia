@@ -1,0 +1,449 @@
+<div class="pagina oc">
+  <a class="voltar" routerLink="/atendimentos"><app-icone nome="voltar" [tamanho]="16" /> Painel de atendimentos</a>
+
+  @if (carregando()) {
+    <div class="vazio"><span class="giro"></span> Carregando o exame…</div>
+  } @else if (!estado() || !atendimento()) {
+    <p class="aviso aviso--erro" role="alert"><app-icone nome="alerta" [tamanho]="16" /> {{ erro() ?? 'Exame não encontrado.' }}</p>
+  } @else {
+    @let e = estado()!;
+    @let a = atendimento()!;
+
+    <header class="cartao oc-paciente">
+      <app-avatar [nome]="a.pacienteNome" [tamanho]="3" />
+      <div class="oc-paciente__dados">
+        <h1>{{ a.pacienteNome }}</h1>
+        <p>
+          @if (idadePaciente()) { <span>{{ idadePaciente() }}</span> }
+          @if (a.pacienteCpf) { <span>CPF {{ cpfMascarado(a.pacienteCpf) }}</span> }
+          <span>{{ e.sexo === 'F' ? 'Feminino' : 'Masculino' }}</span>
+        </p>
+      </div>
+      <div class="oc-paciente__etiquetas">
+        <span class="etiqueta etiqueta--primaria"><app-icone nome="prontuario" [tamanho]="13" /> Exame ocupacional</span>
+        <span class="etiqueta" [class.etiqueta--ia]="comVoz()">
+          <app-icone [nome]="comVoz() ? 'ia' : 'caneta'" [tamanho]="13" /> {{ rotuloModo[e.modo] }}
+        </span>
+        <span class="etiqueta" [class.etiqueta--sucesso]="totalRespondidas() === totalObrigatorias()">
+          {{ totalRespondidas() }} de {{ totalObrigatorias() }} perguntas
+        </span>
+        @if (e.concluido) { <span class="selo selo--finalizado">Concluído</span> }
+      </div>
+    </header>
+
+    @if (erro()) {
+      <p class="aviso aviso--erro" role="alert"><app-icone nome="alerta" [tamanho]="16" /> {{ erro() }}</p>
+    }
+    @if (aviso()) {
+      <p class="aviso aviso--info"><app-icone nome="info" [tamanho]="16" /> {{ aviso() }}</p>
+    }
+
+    @switch (etapa()) {
+      <!-- ---------- Consentimento ---------- -->
+      @case ('consentimento') {
+        <section class="cartao">
+          <div class="cartao__corpo oc-consentimento">
+            <h2><app-icone nome="privacidade" [tamanho]="20" /> Consentimento para o atendimento com IA</h2>
+            <p>Antes de ligar o microfone, explique ao paciente:</p>
+            <ul>
+              <li>O microfone só capta enquanto o médico iniciar a conversa, e pode ser pausado a qualquer momento.</li>
+              <li><strong>O áudio não é gravado</strong> e a conversa transcrita não é guardada: é usada só durante o atendimento e descartada.</li>
+              <li>A IA apenas <strong>sugere</strong> o preenchimento. O médico confere e valida cada resposta.</li>
+              <li>O paciente pode recusar. Nesse caso, abra o atendimento na forma atual, sem IA.</li>
+            </ul>
+            <label class="oc-aceite">
+              <input type="checkbox" [checked]="aceite()" (change)="aceite.set($any($event.target).checked)" />
+              O paciente foi informado e concorda com o uso da IA neste atendimento.
+            </label>
+            <div class="acoes">
+              <button type="button" class="botao botao--grande" [disabled]="!aceite()" (click)="confirmarConsentimento()">
+                <app-icone nome="check" /> Confirmar e iniciar
+              </button>
+            </div>
+          </div>
+        </section>
+      }
+
+      <!-- ---------- Prontuário ---------- -->
+      @case ('prontuario') {
+        @if (comVoz()) {
+          <div class="oc-barra" [class.oc-barra--ouvindo]="ouvindo()">
+            <div class="oc-barra__estado">
+              <span class="oc-ponto" [class.oc-ponto--ouvindo]="ouvindo()" [class.oc-ponto--pausada]="estadoEscuta() === 'pausada'"></span>
+              <div>
+                <strong>Conversa da consulta</strong>
+                <span>{{ indicadorConversa() }}@if (processando()) { · preenchendo… }</span>
+              </div>
+            </div>
+
+            <div class="oc-barra__exame" title="Identificada pela fala do médico durante a conversa">
+              <span class="oc-chip" [class.oc-chip--ok]="e.auscultaCardiaca">
+                <app-icone [nome]="e.auscultaCardiaca ? 'check' : 'estetoscopio'" [tamanho]="13" /> Ausculta cardíaca
+              </span>
+              <span class="oc-chip" [class.oc-chip--ok]="e.auscultaPulmonar">
+                <app-icone [nome]="e.auscultaPulmonar ? 'check' : 'estetoscopio'" [tamanho]="13" /> Ausculta pulmonar
+              </span>
+            </div>
+
+            <div class="oc-barra__acoes">
+              @if (!conversaConcluida()) {
+                @if (!escutaAtiva()) {
+                  <button type="button" class="botao" [disabled]="iniciandoEscuta()" (click)="iniciarConversa()">
+                    @if (iniciandoEscuta()) { <span class="giro"></span> } @else { <app-icone nome="microfone" [tamanho]="16" /> }
+                    Iniciar conversa
+                  </button>
+                  @if (demonstracao()) {
+                    <button type="button" class="botao botao--secundario" (click)="simularConversa()"
+                            title="Conversa fictícia, sem microfone">
+                      <app-icone nome="retomar" [tamanho]="16" /> Simular conversa
+                    </button>
+                  }
+                } @else {
+                  @if (!simulando()) {
+                    <button type="button" class="botao botao--secundario" (click)="alternarPausa()"
+                            [disabled]="estadoEscuta() !== 'ouvindo' && estadoEscuta() !== 'pausada'">
+                      <app-icone [nome]="ouvindo() ? 'pausar' : 'retomar'" [tamanho]="16" /> {{ ouvindo() ? 'Pausar' : 'Retomar' }}
+                    </button>
+                  }
+                  <button type="button" class="botao botao--secundario" (click)="concluirConversa()">
+                    <app-icone nome="check" [tamanho]="16" /> Concluir conversa
+                  </button>
+                }
+              }
+            </div>
+          </div>
+        }
+
+        <div class="oc-grade" [class.oc-grade--voz]="comVoz()">
+          @if (comVoz()) {
+            <aside class="cartao oc-conversa">
+              <div class="cartao__topo">
+                <div class="cartao__titulo">
+                  <span class="cartao__titulo-icone"><app-icone nome="audio" [tamanho]="16" /></span>
+                  <h2>Conversa</h2>
+                </div>
+                <span class="etiqueta" title="A conversa fica só nesta tela e some ao sair">
+                  <app-icone nome="microfone-desligado" [tamanho]="12" /> Não é gravada
+                </span>
+              </div>
+
+              <div class="oc-conversa__corpo" #listaFalas>
+                @if (erroIA()) {
+                  <p class="aviso aviso--alerta"><app-icone nome="alerta" [tamanho]="15" /> {{ erroIA() }}</p>
+                }
+
+                @if (falas().length === 0 && !falaEmAndamento()) {
+                  <div class="vazio">
+                    <span class="vazio__icone"><app-icone nome="microfone" /></span>
+                    @if (conversaConcluida()) {
+                      <p>Conversa concluída. Complete à mão o que tiver faltado.</p>
+                    } @else {
+                      <span class="vazio__titulo">Nada foi dito ainda</span>
+                      <p>Inicie a conversa e entreviste o paciente normalmente. Os campos se preenchem ao lado.</p>
+                    }
+                  </div>
+                }
+
+                @for (fala of falas(); track fala.sequencia) {
+                  <div class="oc-fala" [class.oc-fala--medico]="fala.falante === 'Medico'" [class.oc-fala--nova]="!fala.enviada">
+                    <small>{{ rotuloFalante[fala.falante] }}</small>
+                    <p>{{ fala.texto }}</p>
+                  </div>
+                }
+
+                @if (falaEmAndamento()) {
+                  <div class="oc-fala oc-fala--andamento"><p>{{ falaEmAndamento() }}…</p></div>
+                }
+
+                @for (duvida of esclarecimentos(); track duvida.campo) {
+                  <div class="oc-duvida">
+                    <app-icone nome="info" [tamanho]="15" />
+                    <div>
+                      <strong>Não entendi bem: {{ duvida.rotulo }}</strong>
+                      <p>Pergunte ao paciente: “{{ duvida.pergunta }}”</p>
+                    </div>
+                    <button type="button" class="botao botao--discreto botao--pequeno" (click)="dispensar(duvida)">Dispensar</button>
+                  </div>
+                }
+              </div>
+            </aside>
+          }
+
+          <div class="oc-form">
+            @if (passoAPasso()) {
+              <nav class="oc-passos" aria-label="Seções do prontuário">
+                @for (secao of e.secoes; track secao.id; let i = $index) {
+                  <button type="button" class="oc-passo" [class.oc-passo--atual]="i === indice()"
+                          [class.oc-passo--completa]="secao.pendentes.length === 0" (click)="irPara(i)"
+                          [attr.aria-current]="i === indice() ? 'step' : null">
+                    <span class="oc-passo__numero">
+                      @if (secao.pendentes.length === 0) { <app-icone nome="check" [tamanho]="12" [traco]="3" /> } @else { {{ i + 1 }} }
+                    </span>
+                    {{ secao.rotulo }}
+                  </button>
+                }
+              </nav>
+
+              @if (secaoAtual(); as secao) {
+                <section class="cartao">
+                  <div class="cartao__topo">
+                    <div class="cartao__titulo"><h2>{{ secao.rotulo }}</h2></div>
+                    <span class="etiqueta">Seção {{ indice() + 1 }} de {{ e.secoes.length }}</span>
+                  </div>
+                  <div class="cartao__corpo">
+                    <ng-container [ngTemplateOutlet]="camposTpl" [ngTemplateOutletContext]="{ $implicit: secao }" />
+                  </div>
+                </section>
+
+                <div class="acoes oc-navegacao">
+                  <button type="button" class="botao botao--secundario" [disabled]="indice() === 0" (click)="voltar()">
+                    <app-icone nome="voltar" [tamanho]="16" /> Voltar
+                  </button>
+                  <button type="button" class="botao" (click)="avancar()">
+                    @if (indice() === e.secoes.length - 1) { Ir para o resumo }
+                    @else { {{ comVoz() ? 'Confirmar e continuar' : 'Próximo' }} }
+                    <app-icone nome="avancar" [tamanho]="16" />
+                  </button>
+                </div>
+              }
+            } @else {
+              @for (secao of e.secoes; track secao.id) {
+                <section class="cartao oc-acordeao" [class.oc-acordeao--pendente]="cobrando() && secao.pendentes.length > 0">
+                  <button type="button" class="oc-acordeao__topo" (click)="alternarSecao(secao)"
+                          [attr.aria-expanded]="abertas().has(secao.id)">
+                    <app-icone class="oc-acordeao__seta" [class.oc-acordeao__seta--aberta]="abertas().has(secao.id)" nome="avancar" [tamanho]="16" />
+                    <h2>{{ secao.rotulo }}</h2>
+                    <span class="etiqueta" [class.etiqueta--sucesso]="secao.pendentes.length === 0">
+                      {{ secao.respondidas }} de {{ secao.obrigatorias }}
+                    </span>
+                  </button>
+                  @if (abertas().has(secao.id)) {
+                    <div class="cartao__corpo">
+                      <ng-container [ngTemplateOutlet]="camposTpl" [ngTemplateOutletContext]="{ $implicit: secao }" />
+                    </div>
+                  }
+                </section>
+              }
+
+              <div class="acoes oc-navegacao">
+                <span class="acoes__nota">
+                  @if (cobrando() && secoesComPendencia().length > 0) {
+                    Faltam respostas em {{ secoesComPendencia().length }} seção(ões), destacadas acima.
+                  }
+                </span>
+                <button type="button" class="botao" (click)="encerrar()">
+                  Encerrar consulta <app-icone nome="avancar" [tamanho]="16" />
+                </button>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      <!-- ---------- Resumo ---------- -->
+      @case ('resumo') {
+        @if (e.concluido) {
+          <p class="aviso aviso--sucesso"><app-icone nome="concluido" [tamanho]="16" /> Atendimento salvo. O prontuário não aceita mais alterações.</p>
+        }
+
+        <section class="cartao">
+          <div class="cartao__topo">
+            <div class="cartao__titulo">
+              <span class="cartao__titulo-icone"><app-icone nome="alerta" [tamanho]="16" /></span>
+              <h2>Alertas do atendimento</h2>
+            </div>
+          </div>
+          <div class="cartao__corpo oc-resumo">
+            @if (!e.concluido && criticos().length > 0) {
+              <p class="aviso aviso--erro">
+                <app-icone nome="alerta" [tamanho]="16" />
+                Valores críticos precisam ser corrigidos ou justificados (mínimo de 5 caracteres) para liberar o salvamento.
+              </p>
+            }
+
+            @for (alerta of criticos(); track alerta.chave) {
+              <div class="oc-alerta">
+                <p><app-icone nome="alerta" [tamanho]="15" /> {{ alerta.mensagem }}</p>
+                <div class="campo">
+                  <label class="campo__rotulo" [for]="'just-' + alerta.chave">Justificativa do médico</label>
+                  <textarea [id]="'just-' + alerta.chave" rows="2" [value]="alerta.justificativa ?? ''" [disabled]="e.concluido"
+                            placeholder="Ex.: medida conferida duas vezes" (change)="justificar(alerta, $any($event.target).value)"></textarea>
+                </div>
+                @if (!e.concluido) {
+                  <button type="button" class="botao botao--secundario botao--pequeno" (click)="revisar(secaoDoCampo(alerta.campos[0]!))">
+                    Corrigir o valor
+                  </button>
+                }
+              </div>
+            }
+
+            @for (alerta of avisos(); track alerta.chave) {
+              <p class="aviso aviso--alerta"><app-icone nome="info" [tamanho]="16" /> {{ alerta.mensagem }} <em>(aviso, não bloqueia)</em></p>
+            }
+
+            @if (e.alertas.length === 0) {
+              <p class="aviso aviso--sucesso"><app-icone nome="concluido" [tamanho]="16" /> Nenhuma inconsistência nos valores informados.</p>
+            }
+
+            @for (secao of secoesComPendencia(); track secao.id) {
+              <div class="oc-alerta">
+                <p><app-icone nome="alerta" [tamanho]="15" /> {{ secao.rotulo }}: falta responder {{ secao.pendentes.join(', ') }}.</p>
+                <button type="button" class="botao botao--secundario botao--pequeno" (click)="revisar(secao.id)">Responder</button>
+              </div>
+            }
+          </div>
+        </section>
+
+        <section class="cartao">
+          <div class="cartao__topo">
+            <div class="cartao__titulo">
+              <span class="cartao__titulo-icone"><app-icone nome="prontuario" [tamanho]="16" /></span>
+              <h2>Respostas</h2>
+            </div>
+            @if (comVoz()) {
+              <span class="etiqueta"><app-icone nome="privacidade" [tamanho]="12" /> Nenhum áudio ou conversa foi guardado</span>
+            }
+          </div>
+          <div class="cartao__corpo oc-respostas">
+            @for (secao of e.secoes; track secao.id) {
+              <div>
+                <h3>{{ secao.rotulo }}</h3>
+                <dl>
+                  @for (campo of secao.campos; track campo.id) {
+                    @if (campo.valor !== null) {
+                      <div>
+                        <dt>{{ campo.rotulo }}</dt>
+                        <dd>
+                          {{ campo.valor }}@if (campo.tipo === 'numero' && campo.id !== 'intensidade_dor') { {{ campo.unidade }} }
+                          @if (campo.origem === 'ia') { <span class="etiqueta etiqueta--ia">IA</span> }
+                        </dd>
+                      </div>
+                    }
+                  }
+                  @if (secao.id === 'vitais' && e.imc !== null) {
+                    <div><dt>IMC</dt><dd>{{ e.imc }}</dd></div>
+                  }
+                </dl>
+              </div>
+            }
+          </div>
+        </section>
+
+        @if (!e.concluido) {
+          <div class="acoes oc-navegacao">
+            <button type="button" class="botao botao--secundario" (click)="revisar()">
+              <app-icone nome="voltar" [tamanho]="16" /> Revisar seções
+            </button>
+            <button type="button" class="botao botao--grande" [disabled]="!e.podeConcluir || salvando()" (click)="salvar()">
+              @if (salvando()) { <span class="giro"></span> } @else { <app-icone nome="check" /> }
+              Salvar atendimento
+            </button>
+          </div>
+        }
+      }
+    }
+
+    <!-- ---------- Campos de uma seção ---------- -->
+    <ng-template #camposTpl let-secao>
+      <div class="oc-checklist" [class.oc-checklist--completa]="secao.pendentes.length === 0">
+        <strong>{{ secao.respondidas }} de {{ secao.obrigatorias }} perguntas confirmadas</strong>
+        @if (cobrando() && secao.pendentes.length > 0) {
+          <span role="alert">Falta: {{ secao.pendentes.join(' · ') }}</span>
+        }
+      </div>
+
+      <div class="oc-campos">
+        @for (campo of secao.campos; track campo.id) {
+          @if (visivel(campo)) {
+            <div class="campo oc-campo" [class.oc-campo--largo]="campo.tipo === 'textolongo'"
+                 [class.oc-campo--pendente]="pendente(campo)" [class.oc-campo--bloqueado]="!campo.liberado"
+                 [class.oc-campo--destaque]="destacados().has(campo.id)">
+              <div class="oc-campo__topo">
+                <label class="campo__rotulo" [attr.for]="campo.tipo === 'simnao' || campo.tipo === 'opcao' ? null : 'c-' + campo.id">
+                  {{ campo.rotulo }}
+                  @if (!campo.obrigatorio) { <span class="opcional">opcional</span> }
+                </label>
+                @if (campo.origem === 'ia') { <span class="etiqueta etiqueta--ia"><app-icone nome="ia" [tamanho]="11" /> IA</span> }
+                @else if (campo.origem === 'medico') { <span class="etiqueta etiqueta--medico"><app-icone nome="caneta" [tamanho]="11" /> Médico</span> }
+                @if (pendente(campo)) { <span class="etiqueta etiqueta--alerta">pendente</span> }
+              </div>
+
+              @switch (campo.tipo) {
+                @case ('lista') {
+                  <select [id]="'c-' + campo.id" [disabled]="!campo.liberado || e.concluido"
+                          (change)="responder(campo, $any($event.target).value)">
+                    <option value="" [selected]="campo.valor === null">Selecione uma opção</option>
+                    @for (opcao of campo.opcoes; track opcao) {
+                      <option [value]="opcao" [selected]="campo.valor === opcao">{{ opcao }}</option>
+                    }
+                  </select>
+                }
+                @case ('numero') {
+                  <div class="oc-numero">
+                    <input [id]="'c-' + campo.id" type="number" inputmode="decimal" step="any" min="0" [value]="campo.valor ?? ''"
+                           [disabled]="!campo.liberado || e.concluido" (change)="responder(campo, $any($event.target).value)" />
+                    <span>{{ campo.unidade }}</span>
+                  </div>
+                }
+                @case ('texto') {
+                  <input [id]="'c-' + campo.id" type="text" [value]="campo.valor ?? ''" autocomplete="off"
+                         [disabled]="!campo.liberado || e.concluido" (change)="responder(campo, $any($event.target).value)" />
+                }
+                @case ('textolongo') {
+                  <textarea [id]="'c-' + campo.id" rows="2" [value]="campo.valor ?? ''"
+                            [disabled]="!campo.liberado || e.concluido" (change)="responder(campo, $any($event.target).value)"></textarea>
+                }
+                @case ('data') {
+                  <input [id]="'c-' + campo.id" type="date" [value]="campo.valor ?? ''"
+                         [disabled]="!campo.liberado || e.concluido" (change)="responder(campo, $any($event.target).value)" />
+                }
+                @default {
+                  <div class="oc-opcoes" role="group" [attr.aria-label]="campo.rotulo">
+                    @for (opcao of campo.opcoes; track opcao) {
+                      <button type="button" class="oc-opcao"
+                              [class.oc-opcao--marcada]="campo.valor === opcao" [attr.aria-pressed]="campo.valor === opcao"
+                              [disabled]="!campo.liberado || e.concluido" (click)="responder(campo, opcao)">
+                        {{ opcao }}
+                      </button>
+                    }
+                  </div>
+                }
+              }
+
+              @for (alerta of alertasDoCampo(campo); track alerta.chave) {
+                <p class="oc-campo__nota oc-campo__nota--critico"><app-icone nome="alerta" [tamanho]="13" /> {{ alerta.mensagem }}</p>
+              }
+              @if (campo.diferenca) {
+                <p class="oc-campo__nota"><app-icone nome="historico" [tamanho]="13" /> {{ campo.diferenca }}</p>
+              }
+            </div>
+          }
+        }
+
+        @if (secao.id === 'vitais') {
+          <div class="campo oc-campo oc-campo--calculado">
+            <div class="oc-campo__topo"><span class="campo__rotulo">IMC</span></div>
+            <output>{{ e.imc ?? '—' }}</output>
+            <span class="campo__dica">Calculado de peso e altura</span>
+          </div>
+        }
+      </div>
+    </ng-template>
+
+    <!-- ---------- Lembrete ao entrar no prontuário ---------- -->
+    @if (etapa() === 'prontuario' && !atencaoVista()) {
+      <div class="oc-modal" role="dialog" aria-modal="true" aria-labelledby="atencao-titulo">
+        <div class="cartao oc-modal__caixa">
+          <h2 id="atencao-titulo"><app-icone nome="alerta" [tamanho]="20" /> Atenção</h2>
+          <p><strong>Realizar a aferição da circunferência abdominal durante o exame físico.</strong></p>
+          <p>
+            Além de constituir boa prática da propedêutica médica, esta medida auxilia na avaliação de gordura visceral e na
+            identificação precoce de fatores de risco cardiometabólicos, contribuindo para a prevenção de doenças
+            cardiovasculares e metabólicas.
+          </p>
+          <button type="button" class="botao" (click)="atencaoVista.set(true)">Entendi</button>
+        </div>
+      </div>
+    }
+  }
+</div>

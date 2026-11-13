@@ -1,5 +1,3 @@
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Prontuario.Application.Common.Interfaces;
@@ -15,7 +13,7 @@ namespace Prontuario.Infrastructure.Services;
 /// </summary>
 public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
 {
-    private const string Instrucao = """
+    private const string Cabecalho = """
         Voce e um assistente de documentacao clinica. A partir da transcricao de uma
         consulta medica em portugues do Brasil, preencha os campos do prontuario.
 
@@ -49,7 +47,9 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
         - Nao repita a mesma informacao em mais de um campo; coloque-a no campo mais especifico.
         - Escreva em portugues do Brasil, em terceira pessoa, no registro tecnico usado
           em prontuario, de forma concisa, sem repetir o dialogo literalmente.
+        """;
 
+    private const string OrigensEFalantes = """
         Origem de cada campo:
         - Cada trecho da transcricao comeca com o seu numero entre colchetes ("[12] ...").
         - Em "origens", para cada campo, liste os numeros dos trechos de onde tirou o conteudo
@@ -62,7 +62,9 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
           quem fala do paciente na terceira pessoa ("ela esta com febre") e acompanhante.
         - Trecho que ja chega com o falante entre parenteses foi confirmado pelo medico: use
           como esta. Trecho que mistura falas fica com quem fala a maior parte.
+        """;
 
+    private const string Campos = """
         O que vai em cada campo:
         - queixaPrincipal: o motivo da consulta em uma frase curta, com a duracao quando dita
           (ex.: "Tosse e dor de garganta ha 4 dias.").
@@ -83,6 +85,42 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
           atestado, encaminhamentos e retorno.
         """;
 
+    private const string Instrucao = Cabecalho + "\n\n" + OrigensEFalantes + "\n\n" + Campos;
+
+    /// <summary>
+    /// Durante a consulta a IA nao rele a conversa inteira: recebe o prontuario
+    /// como esta e so as falas novas, e devolve apenas o que mudou. A entrada
+    /// deixa de crescer com a duracao da consulta, e a saida (o que mais custa
+    /// e mais demora) fica restrita ao campo alterado.
+    /// </summary>
+    private const string Incremental = """
+        Atualizacao durante a consulta:
+        - A consulta esta em andamento. Voce recebe o prontuario como esta preenchido ate agora,
+          as ultimas falas ja consideradas (apenas contexto) e as falas novas.
+        - Em cada campo, devolva o texto completo e atualizado SOMENTE se as falas novas mudarem
+          esse campo, integrando a informacao nova ao que ja estava, sem perder o que continua
+          valido. Campo que nao muda: null. Aqui null significa "manter como esta", nunca "apagar".
+        - Se a fala nova corrige algo ja registrado ("na verdade sao cinco dias"), reescreva o
+          campo com a correcao.
+        - Resposta curta ("sim", "nao", "faz tempo") so tem sentido com a pergunta que veio
+          antes: use as falas de contexto para interpreta-la.
+        - Falas novas sem informacao clinica (cumprimentos, conversa lateral): todos os campos null.
+        - Nao reprocesse as falas de contexto: o que elas diziam ja esta no prontuario.
+
+        Origem de cada campo:
+        - Cada fala comeca com o seu numero entre colchetes ("[12] ...").
+        - Em "origens", para cada campo que voce alterou, liste os numeros das falas (novas ou
+          de contexto) que sustentam a alteracao. Campo null tem lista vazia.
+
+        Quem fala:
+        - Em "falantes", diga quem disse cada fala NOVA ("medico", "paciente" ou "acompanhante"),
+          pelo conteudo e pela sequencia do dialogo. Nao inclua as falas de contexto.
+        - Fala que ja chega com o falante entre parenteses: use como esta. Fala que mistura
+          vozes fica com quem fala a maior parte.
+        """;
+
+    private const string InstrucaoIncremental = Cabecalho + "\n\n" + Incremental + "\n\n" + Campos;
+
     /// <summary>
     /// Nos documentos o nome do paciente e preenchido depois, a partir do
     /// cadastro: o marcador e o que garante que ele saia do lugar certo.
@@ -96,9 +134,9 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
 
     private static readonly JsonSerializerOptions OpcoesJson = new(JsonSerializerDefaults.Web);
 
-    private readonly IHttpClientFactory _fabrica;
+    private readonly OpenAiChat _chat;
 
-    public OpenAiClinicalNoteGenerator(IHttpClientFactory fabrica) => _fabrica = fabrica;
+    public OpenAiClinicalNoteGenerator(OpenAiChat chat) => _chat = chat;
 
     public async Task<RascunhoComOrigensDto> GerarRascunhoAsync(
         TextoSanitizado transcricao,
@@ -122,33 +160,12 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
                 {
                     name = "rascunho_clinico",
                     strict = true,
-                    schema = Esquema(),
+                    schema = Esquema(incremental: false),
                 },
             },
         };
 
-        using var requisicao = new HttpRequestMessage(HttpMethod.Post, "chat/completions")
-        {
-            Content = JsonContent.Create(payload),
-        };
-        requisicao.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credenciais.ChaveApi);
-
-        var cliente = _fabrica.CreateClient(OpenAiCliente.Nome);
-        using var resposta = await cliente.SendAsync(requisicao, cancellationToken);
-        var corpo = await resposta.Content.ReadAsStringAsync(cancellationToken);
-
-        if (!resposta.IsSuccessStatusCode)
-        {
-            throw new InvalidOperationException(
-                $"A API de texto respondeu {(int)resposta.StatusCode}: {OpenAiCliente.DescreverErro(corpo)}");
-        }
-
-        using var json = JsonDocument.Parse(corpo);
-        var conteudo = json.RootElement
-            .GetProperty("choices")[0]
-            .GetProperty("message")
-            .GetProperty("content")
-            .GetString();
+        var conteudo = await ChamarAsync(payload, credenciais, "rascunho", cancellationToken);
 
         if (string.IsNullOrWhiteSpace(conteudo))
         {
@@ -161,13 +178,96 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
         return new RascunhoComOrigensDto(Normalizar(rascunho), LerOrigens(conteudo), LerFalantes(conteudo));
     }
 
+    public async Task<AtualizacaoRascunhoDto> AtualizarRascunhoAsync(
+        RegistroSanitizado rascunhoAtual,
+        string? cidAtual,
+        TextoSanitizado falasDeContexto,
+        TextoSanitizado falasNovas,
+        CredenciaisIA credenciais,
+        ContextoGeracao contexto,
+        CancellationToken cancellationToken = default)
+    {
+        // A instrucao (fixa durante a consulta) vai inteira na mensagem de
+        // sistema e o que muda vai depois: o provedor reaproveita o prefixo
+        // repetido e cobra menos por ele.
+        var payload = new
+        {
+            model = credenciais.ModeloTexto,
+            temperature = 0,
+            messages = new object[]
+            {
+                new { role = "system", content = ComContexto(InstrucaoIncremental, contexto) },
+                new { role = "user", content = MensagemIncremental(rascunhoAtual, cidAtual, falasDeContexto, falasNovas) },
+            },
+            response_format = new
+            {
+                type = "json_schema",
+                json_schema = new
+                {
+                    name = "atualizacao_rascunho",
+                    strict = true,
+                    schema = Esquema(incremental: true),
+                },
+            },
+        };
+
+        var conteudo = await ChamarAsync(payload, credenciais, "atualizacao", cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(conteudo))
+        {
+            throw new InvalidOperationException("A API de texto devolveu uma resposta vazia.");
+        }
+
+        var alteracoes = JsonSerializer.Deserialize<RascunhoClinicoDto>(conteudo, OpcoesJson)
+            ?? throw new InvalidOperationException("Nao foi possivel interpretar a atualizacao devolvida pela IA.");
+
+        return new AtualizacaoRascunhoDto(Normalizar(alteracoes), LerOrigens(conteudo), LerFalantes(conteudo));
+    }
+
+    internal static string MensagemIncremental(
+        RegistroSanitizado atual, string? cidAtual, TextoSanitizado falasDeContexto, TextoSanitizado falasNovas)
+    {
+        static string Campo(string nome, string? valor)
+            => $"{nome}: {(string.IsNullOrWhiteSpace(valor) ? "(vazio)" : valor.Trim())}";
+
+        var prontuario = string.Join("\n", new[]
+        {
+            Campo("queixaPrincipal", atual.QueixaPrincipal),
+            Campo("hda", atual.Hda),
+            Campo("antecedentes", atual.Antecedentes),
+            Campo("exameFisico", atual.ExameFisico),
+            Campo("hipoteseDiagnostica", atual.HipoteseDiagnostica),
+            Campo("cid10Sugerido", cidAtual),
+            Campo("conduta", atual.Conduta),
+        });
+
+        var partes = new List<string> { $"Prontuario preenchido ate agora:\n\n<prontuario>\n{prontuario}\n</prontuario>" };
+
+        if (!string.IsNullOrWhiteSpace(falasDeContexto.Valor))
+        {
+            partes.Add($"Falas anteriores, ja consideradas (apenas contexto):\n\n<contexto>\n{falasDeContexto.Valor}\n</contexto>");
+        }
+
+        partes.Add($"Falas novas:\n\n<falas_novas>\n{falasNovas.Valor}\n</falas_novas>");
+        return string.Join("\n\n", partes);
+    }
+
+    private Task<string?> ChamarAsync(
+        object payload, CredenciaisIA credenciais, string operacao, CancellationToken cancellationToken)
+        => _chat.EnviarAsync(payload, credenciais, operacao, cancellationToken);
+
     /// <summary>Falante por trecho; entrada fora do formato e ignorada.</summary>
     internal static IReadOnlyDictionary<int, string> LerFalantes(string conteudo)
     {
         using var json = JsonDocument.Parse(conteudo);
+        return LerFalantes(json.RootElement);
+    }
+
+    internal static IReadOnlyDictionary<int, string> LerFalantes(JsonElement raiz)
+    {
         var resultado = new Dictionary<int, string>();
 
-        if (!json.RootElement.TryGetProperty("falantes", out var falantes) || falantes.ValueKind != JsonValueKind.Array)
+        if (!raiz.TryGetProperty("falantes", out var falantes) || falantes.ValueKind != JsonValueKind.Array)
         {
             return resultado;
         }
@@ -307,28 +407,7 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
             },
         };
 
-        using var requisicao = new HttpRequestMessage(HttpMethod.Post, "chat/completions")
-        {
-            Content = JsonContent.Create(payload),
-        };
-        requisicao.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credenciais.ChaveApi);
-
-        var cliente = _fabrica.CreateClient(OpenAiCliente.Nome);
-        using var resposta = await cliente.SendAsync(requisicao, cancellationToken);
-        var corpo = await resposta.Content.ReadAsStringAsync(cancellationToken);
-
-        if (!resposta.IsSuccessStatusCode)
-        {
-            throw new InvalidOperationException(
-                $"A API de texto respondeu {(int)resposta.StatusCode}: {OpenAiCliente.DescreverErro(corpo)}");
-        }
-
-        using var json = JsonDocument.Parse(corpo);
-        var conteudo = json.RootElement
-            .GetProperty("choices")[0]
-            .GetProperty("message")
-            .GetProperty("content")
-            .GetString();
+        var conteudo = await ChamarAsync(payload, credenciais, "documento", cancellationToken);
 
         return string.IsNullOrWhiteSpace(conteudo)
             ? throw new InvalidOperationException("A API de texto devolveu uma resposta vazia.")
@@ -396,7 +475,7 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
     /// A descricao de cada campo vai junto no esquema e reforca, campo a campo,
     /// o que a instrucao diz - e o que mais reduz informacao no campo errado.
     /// </summary>
-    private static object Esquema()
+    private static object Esquema(bool incremental)
     {
         var campos = new Dictionary<string, string>
         {
@@ -411,12 +490,20 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
 
         var propriedades = campos.ToDictionary(
             campo => campo.Key,
-            campo => (object)new { type = new[] { "string", "null" }, description = campo.Value });
+            campo => (object)new
+            {
+                type = new[] { "string", "null" },
+                description = incremental
+                    ? $"Texto completo e atualizado do campo, somente se as falas novas o mudarem; senao null. {campo.Value}"
+                    : campo.Value,
+            });
 
         propriedades["origens"] = new
         {
             type = "object",
-            description = "Numeros dos trechos da transcricao que sustentam cada campo.",
+            description = incremental
+                ? "Numeros das falas que sustentam cada campo alterado."
+                : "Numeros dos trechos da transcricao que sustentam cada campo.",
             additionalProperties = false,
             required = campos.Keys.ToArray(),
             properties = campos.Keys.ToDictionary(
@@ -427,7 +514,7 @@ public partial class OpenAiClinicalNoteGenerator : IClinicalNoteGenerator
         propriedades["falantes"] = new
         {
             type = "array",
-            description = "Quem disse cada trecho da transcricao.",
+            description = incremental ? "Quem disse cada fala nova." : "Quem disse cada trecho da transcricao.",
             items = new
             {
                 type = "object",

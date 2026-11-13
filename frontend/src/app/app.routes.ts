@@ -26,6 +26,12 @@ export const routes: Routes = [
       import('./features/atendimento/atendimento.component').then((m) => m.AtendimentoComponent),
   },
   {
+    path: 'atendimentos/:id/ocupacional',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/ocupacional/ocupacional.component').then((m) => m.OcupacionalComponent),
+  },
+  {
     path: 'pacientes',
     canActivate: [authGuard],
     loadComponent: () =>
