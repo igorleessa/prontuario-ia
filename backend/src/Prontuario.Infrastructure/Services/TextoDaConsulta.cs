@@ -20,6 +20,19 @@ public static class TextoDaConsulta
                         ? $"[{t.Sequencia}] ({Rotulo(t.Falante).ToLowerInvariant()}) {t.Texto}"
                         : $"[{t.Sequencia}] {t.Texto}"));
 
+    /// <summary>
+    /// Um recorte da consulta, numerado como em <see cref="Numerado(Transcricao)"/>.
+    /// Com <paramref name="rotularTodos"/>, vai tambem o falante que a IA ja
+    /// atribuiu - para as falas de contexto, que ela nao precisa decidir de novo.
+    /// </summary>
+    public static string Numerado(IEnumerable<TrechoTranscricao> trechos, bool rotularTodos)
+        => string.Join(
+            "\n",
+            trechos.OrderBy(t => t.Sequencia).Where(t => t.Texto.Length > 0).Select(t =>
+                t.Falante != Falante.Indefinido && (rotularTodos || t.FalanteConfirmado)
+                    ? $"[{t.Sequencia}] ({Rotulo(t.Falante).ToLowerInvariant()}) {t.Texto}"
+                    : $"[{t.Sequencia}] {t.Texto}"));
+
     /// <summary>Em forma de dialogo ("Medico: ..."), para a redacao dos documentos.</summary>
     public static string Dialogo(Transcricao transcricao)
         => transcricao.Trechos.Count == 0

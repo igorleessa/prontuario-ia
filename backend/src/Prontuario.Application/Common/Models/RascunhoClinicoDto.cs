@@ -31,3 +31,13 @@ public sealed record RascunhoComOrigensDto(
     public static readonly IReadOnlyDictionary<string, IReadOnlyList<int>> SemOrigens =
         new Dictionary<string, IReadOnlyList<int>>();
 }
+
+/// <summary>
+/// O que as falas novas mudaram no rascunho, durante a consulta. Em
+/// <paramref name="Alteracoes"/>, campo nulo significa "nao mudou": a IA so
+/// devolve o que alterou, e o restante do rascunho fica como estava.
+/// </summary>
+public sealed record AtualizacaoRascunhoDto(
+    RascunhoClinicoDto Alteracoes,
+    IReadOnlyDictionary<string, IReadOnlyList<int>> Origens,
+    IReadOnlyDictionary<int, string>? Falantes = null);

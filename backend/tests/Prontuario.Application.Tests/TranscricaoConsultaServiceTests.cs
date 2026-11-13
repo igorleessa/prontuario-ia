@@ -166,7 +166,7 @@ public class TranscricaoConsultaServiceTests : IDisposable
                 Arg.Any<CredenciaisIA>(), Arg.Any<ContextoGeracao>(), Arg.Any<CancellationToken>())
             .Returns(ComOrigens(new RascunhoClinicoDto("[PACIENTE] com tosse há 4 dias.", null, null, null, null, "J06.9", null)));
 
-        var resultado = await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+        var resultado = await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id, final: true);
 
         Assert.NotNull(enviado);
         Assert.DoesNotContain("Helena", enviado!.Valor);
@@ -197,7 +197,7 @@ public class TranscricaoConsultaServiceTests : IDisposable
                     ["hda"] = [1],
                 }));
 
-        var resultado = await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+        var resultado = await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id, final: true);
 
         Assert.Equal("[0] Estou com tosse.\n[1] Faz quatro dias.", enviado!.Valor);
 
@@ -215,32 +215,181 @@ public class TranscricaoConsultaServiceTests : IDisposable
     {
         _configuracoes.ObterCredenciaisAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(new CredenciaisIA("sk-teste", "gpt-4o-transcribe", "gpt-4o", "gpt-4o-mini"));
-        await Registrar(0, "Tosse.");
+        await Registrar(0, "Estou com tosse.");
 
         CredenciaisIA? usadas = null;
         _llm.GerarRascunhoAsync(
                 Arg.Any<TextoSanitizado>(), Arg.Do<CredenciaisIA>(c => usadas = c),
                 Arg.Any<ContextoGeracao>(), Arg.Any<CancellationToken>())
             .Returns(ComOrigens(new RascunhoClinicoDto("Tosse.", null, null, null, null, null, null)));
+        _llm.AtualizarRascunhoAsync(
+                Arg.Any<RegistroSanitizado>(), Arg.Any<string?>(), Arg.Any<TextoSanitizado>(), Arg.Any<TextoSanitizado>(),
+                Arg.Do<CredenciaisIA>(c => usadas = c), Arg.Any<ContextoGeracao>(), Arg.Any<CancellationToken>())
+            .Returns(Alteracao(queixa: "Tosse."));
 
         await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id, final);
 
         Assert.Equal(esperado, usadas!.ModeloTexto);
     }
 
+    // ---------- Atualizacao incremental durante a consulta ----------
+
     [Fact]
-    public async Task Rascunho_RefeitoDuranteAConsulta_SubstituiOAnterior()
+    public async Task Atualizacao_MandaSoAsFalasNovasComORascunhoAtualEOContexto()
     {
-        await Registrar(0, "Tosse há 4 dias.");
-        RetornarQueixa("Tosse há 4 dias.");
+        await Registrar(0, "O que a trouxe hoje, dona Helena?");
+        await Registrar(1, "Estou com tosse há quatro dias.");
+        var chamadas = CapturarAtualizacoes(
+            Alteracao(queixa: "[PACIENTE] com tosse há 4 dias.", falantes: new() { [0] = "Medico", [1] = "Paciente" }),
+            Alteracao(hda: "Tosse produtiva, com catarro amarelado."));
+
         await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
 
-        await Registrar(1, "Com catarro amarelado.");
-        RetornarQueixa("Tosse produtiva há 4 dias.");
-        await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+        await Registrar(2, "Tem catarro?");
+        await Registrar(3, "Tem, amarelado.");
+        var resultado = await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
 
-        Assert.Equal("Tosse produtiva há 4 dias.", _db.RascunhosIA.Single().QueixaPrincipal);
+        // Primeira chamada: nao ha rascunho nem contexto, tudo e fala nova.
+        Assert.Equal(string.Empty, chamadas[0].Contexto);
+        Assert.Equal("[0] O que a trouxe hoje, dona [PACIENTE]?\n[1] Estou com tosse há quatro dias.", chamadas[0].Novas);
+
+        // Segunda: so as duas falas novas; as anteriores vao como contexto, ja
+        // com quem falou, e o rascunho volta a IA sem o nome do paciente.
+        Assert.Equal("[2] Tem catarro?\n[3] Tem, amarelado.", chamadas[1].Novas);
+        Assert.Equal(
+            "[0] (medico) O que a trouxe hoje, dona [PACIENTE]?\n[1] (paciente) Estou com tosse há quatro dias.",
+            chamadas[1].Contexto);
+        Assert.Equal("[PACIENTE] com tosse há 4 dias.", chamadas[1].Atual.QueixaPrincipal);
+
+        // Campo que a IA nao devolveu fica como estava.
+        Assert.Equal("Helena Souza com tosse há 4 dias.", resultado.Valor!.Rascunho.QueixaPrincipal);
+        Assert.Equal("Tosse produtiva, com catarro amarelado.", resultado.Valor.Rascunho.Hda);
+        await _llm.DidNotReceiveWithAnyArgs().GerarRascunhoAsync(default!, default!, default!, default);
     }
+
+    [Fact]
+    public async Task Atualizacao_ContextoFicaLimitadoAsUltimasFalas()
+    {
+        var chamadas = CapturarAtualizacoes(Alteracao(queixa: "Tosse."));
+
+        for (var lote = 0; lote < 10; lote++)
+        {
+            for (var i = 0; i < 3; i++)
+            {
+                await Registrar(lote * 3 + i, $"Fala numero {lote * 3 + i} da consulta com conteudo clinico.");
+            }
+
+            await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+        }
+
+        // O que vai a IA nao cresce com a consulta: 3 falas novas e 6 de contexto.
+        var ultima = chamadas[^1];
+        Assert.Equal(10, chamadas.Count);
+        Assert.Equal(3, ultima.Novas.Split('\n').Length);
+        Assert.Equal(6, ultima.Contexto.Split('\n').Length);
+        Assert.StartsWith("[21] ", ultima.Contexto);
+    }
+
+    [Fact]
+    public async Task Atualizacao_SomaAsOrigensDoCampoAlteradoEIgnoraCitacaoDeFalaNaoEnviada()
+    {
+        await Registrar(0, "Estou com tosse há quatro dias.");
+        CapturarAtualizacoes(
+            Alteracao(queixa: "Tosse há 4 dias.", origens: new() { ["queixaPrincipal"] = [0] }),
+            Alteracao(queixa: "Tosse produtiva há 4 dias.", origens: new() { ["queixaPrincipal"] = [1, 42], ["hda"] = [1] }));
+
+        await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+        await Registrar(1, "Com catarro amarelado desde ontem.");
+        var resultado = await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+
+        Assert.Equal([0, 1], resultado.Valor!.Origens["queixaPrincipal"]);
+        Assert.False(resultado.Valor.Origens.ContainsKey("hda"));
+    }
+
+    [Fact]
+    public async Task Atualizacao_SoComConfirmacoes_NaoChamaAIAEAsFalasSeguemNoProximoLote()
+    {
+        var chamadas = CapturarAtualizacoes(Alteracao(queixa: "Tosse há 4 dias."));
+        await Registrar(0, "Bom dia!");
+        await Registrar(1, "Uhum, tá bom.");
+
+        var semChamada = await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+
+        Assert.Equal(ResultadoAtendimento.Ok, semChamada.Resultado);
+        Assert.Null(semChamada.Valor!.Rascunho.QueixaPrincipal);
+        Assert.Empty(chamadas);
+
+        await Registrar(2, "Estou com tosse há quatro dias.");
+        await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+
+        Assert.Equal("[0] Bom dia!\n[1] Uhum, tá bom.\n[2] Estou com tosse há quatro dias.", chamadas.Single().Novas);
+    }
+
+    [Fact]
+    public async Task Atualizacao_SemFalaNova_NaoChamaAIA()
+    {
+        var chamadas = CapturarAtualizacoes(Alteracao(queixa: "Tosse há 4 dias."));
+        await Registrar(0, "Estou com tosse há quatro dias.");
+
+        await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+        // O mesmo trecho reenviado (rede instavel) nao e fala nova.
+        await Registrar(0, "Estou com tosse há quatro dias.");
+        var repetida = await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+
+        Assert.Single(chamadas);
+        Assert.Equal("Tosse há 4 dias.", repetida.Valor!.Rascunho.QueixaPrincipal);
+    }
+
+    [Fact]
+    public async Task Atualizacao_ComFalhaDaIA_AsFalasVoltamNaProximaTentativa()
+    {
+        await Registrar(0, "Estou com tosse há quatro dias.");
+        _llm.AtualizarRascunhoAsync(
+                Arg.Any<RegistroSanitizado>(), Arg.Any<string?>(), Arg.Any<TextoSanitizado>(), Arg.Any<TextoSanitizado>(),
+                Arg.Any<CredenciaisIA>(), Arg.Any<ContextoGeracao>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new InvalidOperationException("A API de texto respondeu 429: limite"));
+
+        var falha = await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+
+        Assert.Equal(ResultadoAtendimento.Falha, falha.Resultado);
+        Assert.False(_db.TrechosTranscricao.Single().ConsideradoNoRascunho);
+
+        var chamadas = CapturarAtualizacoes(Alteracao(queixa: "Tosse há 4 dias."));
+        await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+
+        Assert.Equal("[0] Estou com tosse há quatro dias.", chamadas.Single().Novas);
+        Assert.Null(_db.Atendimentos.Single().ErroProcessamentoIA);
+    }
+
+    [Fact]
+    public async Task PassadaFinal_LeAConsultaInteiraMesmoDepoisDasAtualizacoes()
+    {
+        await Registrar(0, "Estou com tosse há quatro dias.");
+        CapturarAtualizacoes(Alteracao(queixa: "Tosse há 4 dias."));
+        await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+        await Registrar(1, "Com catarro amarelado desde ontem.");
+
+        TextoSanitizado? enviado = null;
+        _llm.GerarRascunhoAsync(
+                Arg.Do<TextoSanitizado>(texto => enviado = texto),
+                Arg.Any<CredenciaisIA>(), Arg.Any<ContextoGeracao>(), Arg.Any<CancellationToken>())
+            .Returns(ComOrigens(new RascunhoClinicoDto("Tosse produtiva há 4 dias.", null, null, null, null, null, null)));
+
+        await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id, final: true);
+
+        Assert.Equal("[0] Estou com tosse há quatro dias.\n[1] Com catarro amarelado desde ontem.", enviado!.Valor);
+        Assert.Equal("Tosse produtiva há 4 dias.", _db.RascunhosIA.Single().QueixaPrincipal);
+        Assert.All(_db.TrechosTranscricao, trecho => Assert.True(trecho.ConsideradoNoRascunho));
+    }
+
+    [Theory]
+    [InlineData(false, "Uhum.", "Tá bom, obrigada.")]
+    [InlineData(false, "Bom dia!", "Oi, tudo bem?")]
+    [InlineData(true, "Uhum.", "Não.")]
+    [InlineData(true, "Dor de cabeça.")]
+    [InlineData(true, "120 por 80.")]
+    public void Triagem_SoDeixaPassarLoteComConteudo(bool esperado, params string[] falas)
+        => Assert.Equal(esperado, TriagemDeFalas.TemConteudo(falas));
 
     [Fact]
     public async Task Rascunho_ComFalhaDaIA_RegistraOErroSemTravarOAtendimento()
@@ -250,7 +399,7 @@ public class TranscricaoConsultaServiceTests : IDisposable
                 Arg.Any<TextoSanitizado>(), Arg.Any<CredenciaisIA>(), Arg.Any<ContextoGeracao>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("A API de texto respondeu 429: limite"));
 
-        var resultado = await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+        var resultado = await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id, final: true);
 
         Assert.Equal(ResultadoAtendimento.Falha, resultado.Resultado);
         Assert.Equal(StatusAtendimento.EmConsulta, _db.Atendimentos.Single().Status);
@@ -260,7 +409,7 @@ public class TranscricaoConsultaServiceTests : IDisposable
     [Fact]
     public async Task Rascunho_SemFalaTranscrita_NaoChamaAIA()
     {
-        var resultado = await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+        var resultado = await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id, final: true);
 
         Assert.Equal(ResultadoAtendimento.Conflito, resultado.Resultado);
         await _llm.DidNotReceiveWithAnyArgs().GerarRascunhoAsync(default!, default!, default!, default);
@@ -273,7 +422,7 @@ public class TranscricaoConsultaServiceTests : IDisposable
         await _db.SaveChangesAsync();
 
         var trecho = await _servico.RegistrarTrechoAsync(_atendimento.Id, _clinica.Id, new RegistrarTrechoDto(0, "texto"));
-        var rascunho = await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+        var rascunho = await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id, final: true);
 
         Assert.Equal(ResultadoAtendimento.Conflito, trecho.Resultado);
         Assert.Equal(ResultadoAtendimento.Conflito, rascunho.Resultado);
@@ -316,7 +465,7 @@ public class TranscricaoConsultaServiceTests : IDisposable
 
         var trecho = await servico.RegistrarTrechoAsync(
             _atendimento.Id, _clinica.Id, new RegistrarTrechoDto(0, "Quem veio foi o Gervásio."));
-        var rascunho = await servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+        var rascunho = await servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id, final: true);
 
         Assert.Equal(ResultadoAtendimento.Ok, trecho.Resultado);
         Assert.False(_db.TrechosTranscricao.Single().ReconhecimentoAplicado);
@@ -338,7 +487,7 @@ public class TranscricaoConsultaServiceTests : IDisposable
                 Arg.Any<CredenciaisIA>(), Arg.Any<ContextoGeracao>(), Arg.Any<CancellationToken>())
             .Returns(ComOrigens(new RascunhoClinicoDto(null, null, null, null, null, null, null)));
 
-        var rascunho = await servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+        var rascunho = await servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id, final: true);
 
         Assert.Equal(ResultadoAtendimento.Ok, rascunho.Resultado);
         Assert.Equal("[0] Quem veio foi o [PESSOA].", enviado!.Valor);
@@ -392,7 +541,7 @@ public class TranscricaoConsultaServiceTests : IDisposable
                 new Dictionary<string, IReadOnlyList<int>>(),
                 new Dictionary<int, string> { [0] = "Medico", [1] = "Paciente", [9] = "Paciente" }));
 
-        var resultado = await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+        var resultado = await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id, final: true);
 
         var trechos = _db.TrechosTranscricao.OrderBy(t => t.Sequencia).ToList();
         Assert.Equal(Falante.Medico, trechos[0].Falante);
@@ -413,7 +562,7 @@ public class TranscricaoConsultaServiceTests : IDisposable
                 Arg.Any<CredenciaisIA>(), Arg.Any<ContextoGeracao>(), Arg.Any<CancellationToken>())
             .Returns(ComOrigens(new RascunhoClinicoDto("Febre.", null, null, null, null, null, null)));
 
-        await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id);
+        await _servico.GerarRascunhoAsync(_atendimento.Id, _clinica.Id, final: true);
 
         Assert.Equal("[0] (acompanhante) Ela está com febre desde ontem.", enviado!.Valor);
     }
@@ -534,6 +683,36 @@ public class TranscricaoConsultaServiceTests : IDisposable
         => _llm.GerarRascunhoAsync(
                 Arg.Any<TextoSanitizado>(), Arg.Any<CredenciaisIA>(), Arg.Any<ContextoGeracao>(), Arg.Any<CancellationToken>())
             .Returns(ComOrigens(new RascunhoClinicoDto(queixa, null, null, null, null, null, null)));
+
+    private sealed record ChamadaDeAtualizacao(RegistroSanitizado Atual, string Contexto, string Novas);
+
+    /// <summary>Guarda o que foi enviado a IA em cada atualizacao e devolve as respostas, em ordem (a ultima se repete).</summary>
+    private List<ChamadaDeAtualizacao> CapturarAtualizacoes(params AtualizacaoRascunhoDto[] respostas)
+    {
+        var chamadas = new List<ChamadaDeAtualizacao>();
+        _llm.AtualizarRascunhoAsync(
+                Arg.Any<RegistroSanitizado>(), Arg.Any<string?>(), Arg.Any<TextoSanitizado>(), Arg.Any<TextoSanitizado>(),
+                Arg.Any<CredenciaisIA>(), Arg.Any<ContextoGeracao>(), Arg.Any<CancellationToken>())
+            .Returns(chamada =>
+            {
+                chamadas.Add(new ChamadaDeAtualizacao(
+                    chamada.ArgAt<RegistroSanitizado>(0),
+                    chamada.ArgAt<TextoSanitizado>(2).Valor,
+                    chamada.ArgAt<TextoSanitizado>(3).Valor));
+                return respostas[Math.Min(chamadas.Count, respostas.Length) - 1];
+            });
+        return chamadas;
+    }
+
+    private static AtualizacaoRascunhoDto Alteracao(
+        string? queixa = null,
+        string? hda = null,
+        Dictionary<string, IReadOnlyList<int>>? origens = null,
+        Dictionary<int, string>? falantes = null)
+        => new(
+            new RascunhoClinicoDto(queixa, hda, null, null, null, null, null),
+            origens ?? new Dictionary<string, IReadOnlyList<int>>(),
+            falantes);
 
     private static RascunhoComOrigensDto ComOrigens(
         RascunhoClinicoDto rascunho, Dictionary<string, IReadOnlyList<int>>? origens = null)

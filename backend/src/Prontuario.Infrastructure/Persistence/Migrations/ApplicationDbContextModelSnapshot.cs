@@ -520,6 +520,9 @@ namespace Prontuario.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("ConsideradoNoRascunho")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime>("CriadoEm")
                         .HasColumnType("timestamp with time zone");
 
