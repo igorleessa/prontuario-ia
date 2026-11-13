@@ -3,7 +3,9 @@ import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angu
 import { Router, RouterLink } from '@angular/router';
 import { Paciente } from '../../../core/models/paciente.model';
 import { TemplateNota } from '../../../core/models/template.model';
+import { ModoOcupacional, SexoPaciente } from '../../../core/models/ocupacional.model';
 import { AtendimentoService } from '../../../core/services/atendimento.service';
+import { OcupacionalService } from '../../../core/services/ocupacional.service';
 import { PacienteService } from '../../../core/services/paciente.service';
 import { TemplateService } from '../../../core/services/template.service';
 import { AvatarComponent } from '../../../shared/avatar.component';
@@ -21,6 +23,7 @@ export class NovoAtendimentoComponent {
   private readonly pacientes = inject(PacienteService);
   private readonly atendimentos = inject(AtendimentoService);
   private readonly templates = inject(TemplateService);
+  private readonly ocupacionais = inject(OcupacionalService);
   private readonly router = inject(Router);
 
   /** ?paciente=ID vindo da lista de pacientes: já chega com o paciente escolhido. */
@@ -37,6 +40,21 @@ export class NovoAtendimentoComponent {
   /** Modelo de nota da especialidade; vazio usa o modelo generico (SOAP). */
   readonly modelos = signal<TemplateNota[]>([]);
   readonly modeloEscolhido = signal<string>('');
+
+  /** Consulta clínica (nota livre) ou exame ocupacional (prontuário de 9 seções). */
+  readonly tipo = signal<'clinica' | 'ocupacional'>('clinica');
+  readonly modoOcupacional = signal<ModoOcupacional>('Escriba');
+  readonly sexo = signal<SexoPaciente | ''>('');
+
+  readonly formas: { modo: ModoOcupacional; titulo: string; descricao: string }[] = [
+    { modo: 'Tradicional', titulo: 'Forma atual', descricao: 'Você preenche tudo, seção a seção. Sem IA.' },
+    { modo: 'Guiada', titulo: 'Atendimento com auxílio de IA', descricao: 'Entrevista seção a seção; a IA preenche a seção em foco.' },
+    { modo: 'Escriba', titulo: 'Modo Escriba', descricao: 'Conversa livre; a IA distribui cada resposta na seção certa.' },
+  ];
+
+  readonly podeAbrir = computed(
+    () => !!this.selecionado() && !this.abrindo() && (this.tipo() === 'clinica' || this.sexo() !== ''),
+  );
 
   readonly cpfMascarado = cpfMascarado;
 
@@ -147,12 +165,32 @@ export class NovoAtendimentoComponent {
     this.abrindo.set(true);
     this.erro.set(null);
 
+    const falhou = () => {
+      this.abrindo.set(false);
+      this.erro.set('Não foi possível abrir o atendimento.');
+    };
+
+    if (this.tipo() === 'ocupacional') {
+      const sexo = this.sexo();
+      if (sexo === '') {
+        this.abrindo.set(false);
+        return;
+      }
+
+      this.atendimentos.abrir(paciente.id, null).subscribe({
+        next: ({ id }) =>
+          this.ocupacionais.iniciar(id, this.modoOcupacional(), sexo).subscribe({
+            next: () => this.router.navigate(['/atendimentos', id, 'ocupacional']),
+            error: falhou,
+          }),
+        error: falhou,
+      });
+      return;
+    }
+
     this.atendimentos.abrir(paciente.id, this.modeloEscolhido() || null).subscribe({
       next: ({ id }) => this.router.navigate(['/atendimentos', id]),
-      error: () => {
-        this.abrindo.set(false);
-        this.erro.set('Não foi possível abrir o atendimento.');
-      },
+      error: falhou,
     });
   }
 

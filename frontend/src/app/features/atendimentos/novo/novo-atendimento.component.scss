@@ -142,3 +142,25 @@
   .resumo { position: static; }
   .cadastro { grid-template-columns: minmax(0, 1fr); }
 }
+
+.formas { display: flex; flex-direction: column; gap: 0.375rem; }
+
+.forma {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  strong { font-size: 0.875rem; }
+  small { font-size: 0.75rem; color: var(--texto-tenue); }
+}
+
+.forma:hover { border-color: var(--primary); }
+.forma--escolhida { border-color: var(--primary); background: var(--primary-suave); box-shadow: var(--anel); }

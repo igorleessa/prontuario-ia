@@ -58,6 +58,26 @@ dos campos → revisão) atende dois modelos de negócio, escolhidos por configu
 - Falha da IA não bloqueia nada: o formulário continua preenchível à mão, e o
   rascunho pode ser refeito sobre a transcrição sem duplicar o atendimento.
 
+**Exame ocupacional (prontuário de 9 seções)**
+- Escolhido em "Nova consulta", em três formas: **forma atual** (o médico preenche,
+  sem IA), **IA guiada** (seção a seção) e **Modo Escriba** (conversa livre, a IA
+  distribui cada resposta na seção certa).
+- Os campos, as opções e os condicionais são dados (`EsquemaOcupacional`); checklist
+  de obrigatórios, alertas de consistência (bloqueiam salvar até corrigir ou
+  justificar) e comparação com o exame anterior são regras puras, sem IA.
+- **A conversa não é guardada.** O navegador manda só as falas novas, com as últimas
+  como contexto; o servidor sanitiza, chama a IA e esquece o texto. No banco ficam
+  as respostas, a origem de cada uma (IA ou médico) e se a ausculta foi identificada.
+- **Custo baixo por desenho:** instrução e esquema vão fixos na mensagem de sistema
+  (o provedor cobra menos pelo prefixo repetido), a resposta traz só o que mudou, e
+  lote só de confirmações ("uhum", "bom dia") não gera chamada.
+- A IA só sugere: valor fora das opções, condicional não liberado ou campo que não
+  aceita voz (token, ASO) é descartado, e resposta do médico nunca é sobrescrita.
+- Com o modo demonstração ligado, "Simular conversa" envia uma conversa fictícia no
+  lugar do microfone.
+- Ainda fora: Parecer Clínico, Meu Check-up/HRA, envio ao colaborador, NPS, Gestão
+  Médica e a separação de vozes pelo áudio.
+
 **Privacidade: sanitização antes da IA**
 - Camada local (sem nenhum serviço externo) entre a transcrição e todo o resto:
   modelo de texto, banco e logs. Ver `backend/src/Prontuario.Application/Privacidade`.

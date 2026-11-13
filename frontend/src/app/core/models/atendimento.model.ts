@@ -18,6 +18,8 @@ export interface AtendimentoResumo {
   dataHora: string;
   status: StatusAtendimento;
   consentimentoTranscricao: boolean;
+  /** Exame ocupacional: abre no prontuário das 9 seções. */
+  ocupacional: boolean;
 }
 
 /** Espelha AtendimentoDetalheDto do backend. */
@@ -53,6 +55,8 @@ export interface AtendimentoDetalhe {
   trechos: TrechoRegistrado[];
   /** De quais trechos a IA tirou cada campo do rascunho. */
   origensIA: OrigensRascunho;
+  /** Exame ocupacional: abre no prontuário das 9 seções. */
+  ocupacional: boolean;
 }
 
 /** Espelha MetricasClinicaDto. O tempo economizado é estimativa declarada. */

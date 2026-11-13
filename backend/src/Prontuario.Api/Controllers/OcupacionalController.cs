@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Prontuario.Application.Common.Interfaces;
 using Prontuario.Application.Common.Models;
+using Prontuario.Infrastructure.Services;
 
 namespace Prontuario.Api.Controllers;
 
@@ -55,6 +56,13 @@ public class OcupacionalController : ApiControllerBase
     [HttpPost("concluir")]
     public async Task<IActionResult> Concluir(Guid id, CancellationToken cancellationToken)
         => Responder(await _ocupacional.ConcluirAsync(id, ClinicaId, cancellationToken));
+
+    /// <summary>Falas da conversa ficticia do modo demonstracao. So responde com Demonstracao:Habilitado.</summary>
+    [HttpGet("/api/demonstracao/exame-ocupacional")]
+    public IActionResult ConversaDemonstracao([FromServices] IConfiguration configuracao)
+        => configuracao.GetValue<bool>("Demonstracao:Habilitado")
+            ? Ok(new { falas = ExameOcupacionalExemplo.Falas })
+            : NotFound();
 
     private IActionResult Responder<T>(ResultadoOperacao<T> resultado) => resultado.Resultado switch
     {
